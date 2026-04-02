@@ -190,11 +190,12 @@ if menu == "📊 Dashboard":
         top_book = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
         near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
         
-        # 🛠️ ทุบโค้ด AI ให้แบน ป้องกัน Streamlit แทรกแซง
         main_insight = f"<div class='ai-main'><h4 style='color:#6C63FF; margin-bottom:10px;'>🌟 ภาพรวมและทิศทางอนาคต (Overall Trends)</h4><p><b>นิยายชูโรงของเรา:</b> ตอนนี้เรื่อง <b>\"{top_book}\"</b> ยืนหนึ่งเรื่องการสร้างรายได้ครับ ในขณะที่หมวดหมู่ที่นักอ่านเปย์หนักที่สุดตกเป็นของ <b>\"{top_cat}\"</b></p><p><b>💡 AI ขอแนะนำ:</b> ในการซื้อลิขสิทธิ์เรื่องต่อไป แนะนำให้เล็งหมวด <b>\"{top_cat}\"</b> เพิ่มเติมครับ เพราะฐานคนอ่านของเราชอบแนวนี้เป็นพิเศษ</p>"
         if near_finish: main_insight += f"<p><b>🚀 โอกาสทอง:</b> มีนิยายที่แปลไปแล้วเกิน 80% คือ <b>{', '.join(near_finish)}</b> เตรียมจัดแพ็กเกจ E-Book หรือติดเหรียญโปรโมทตอนจบได้เลยครับ คาดว่ายอดจะพุ่งกระฉูดแน่นอน!</p>"
         main_insight += "</div>"
-        st.markdown(main_insight, unsafe_allow_html=True)
+        
+        # 🛡️ ทุบโค้ดให้แบน ป้องกัน Streamlit แทรกแซง
+        st.markdown(main_insight.replace('\n', ''), unsafe_allow_html=True)
         
         col_qc1, col_qc2 = st.columns(2)
         with col_qc1:
@@ -202,7 +203,8 @@ if menu == "📊 Dashboard":
             if not df_tong.empty and df_tong['ยอดสุทธิ'].sum() > 0:
                 tong_top = df_tong.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
                 tong_rev = df_tong['ยอดสุทธิ'].sum()
-                st.markdown(f"<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ผลงานของ ตอง (Tong)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tong_top}\"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p><p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>\"{tong_top}\"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p></div>", unsafe_allow_html=True)
+                html_tong = f"<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ผลงานของ ตอง (Tong)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tong_top}\"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p><p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>\"{tong_top}\"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p></div>"
+                st.markdown(html_tong.replace('\n', ''), unsafe_allow_html=True)
             else:
                 st.markdown("<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ตอง (Tong)</h4><p>กำลังรอสร้างผลงานยอดขายแรกอยู่ครับ สู้ๆ!</p></div>", unsafe_allow_html=True)
                 
@@ -211,7 +213,8 @@ if menu == "📊 Dashboard":
             if not df_tao.empty and df_tao['ยอดสุทธิ'].sum() > 0:
                 tao_top = df_tao.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
                 tao_rev = df_tao['ยอดสุทธิ'].sum()
-                st.markdown(f"<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ผลงานของ ตาว (Tao)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tao_top}\"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p><p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>\"{tao_top}\"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p></div>", unsafe_allow_html=True)
+                html_tao = f"<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ผลงานของ ตาว (Tao)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tao_top}\"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p><p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>\"{tao_top}\"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p></div>"
+                st.markdown(html_tao.replace('\n', ''), unsafe_allow_html=True)
             else:
                 st.markdown("<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ตาว (Tao)</h4><p>รอเปิดตัวยอดขายสุดปังอยู่ครับ เป็นกำลังใจให้!</p></div>", unsafe_allow_html=True)
 
@@ -347,6 +350,7 @@ elif menu == "📚 คลังนิยาย":
                         st.markdown("<div class='rank-card'>", unsafe_allow_html=True)
                         safe_image(b.get('ภาพปก'))
                         st.markdown(f"<div style='font-size:15px; font-weight:600; line-height:1.3; margin-bottom:5px;'>{b['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
+                        
                         stat_color = "#28a745" if b.get('สถานะ') == 'จบแล้ว' else ("#ffc107" if b.get('สถานะ') == 'พักการแปล' else "#17a2b8")
                         st.markdown(f"<span style='color:{stat_color}; font-size:13px; font-weight:600;'>● {b.get('สถานะ')}</span><br><br>", unsafe_allow_html=True)
                         if st.button("✏️ จัดการ", key=f"edit_{b['_orig_idx']}", use_container_width=True):
@@ -401,17 +405,13 @@ elif menu == "📢 แนะนำนิยาย":
             synopsis_text = 'ยังไม่มีการระบุเรื่องย่อสำหรับนิยายเรื่องนี้'
         else:
             synopsis_text = synopsis_val.replace('\n', '<br>')
-        
-        links_html = ""
-        for link in b.get('ลิงก์อ่าน', []):
-            if link.get('url'):
-                links_html += f"<a href='{link['url']}' style='display:inline-block; background: linear-gradient(135deg, #6C63FF 0%, #8A84FF 100%); color:white; padding:8px 20px; border-radius:25px; text-decoration:none; font-weight:600; margin-right:10px; box-shadow: 0 4px 10px rgba(108,99,255,0.2);'>📖 {link.get('note','อ่านเลย')}</a>"
-        if not links_html: links_html = "<span style='color:#888;'>กำลังอัปเดตลิงก์อ่าน...</span>"
 
-        # 🛠️ ทุบโค้ดแบนราบ ป้องกัน Streamlit แทรกแซง HTML
-        promo_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f4f6f9 100%); padding: 50px; border-radius: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.06); border: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; max-width: 1000px; margin: 0 auto;'><div style='flex: 0 0 320px;'><img src='{img_url}' style='width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.15);' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"></div><div style='flex: 1; min-width: 300px;'><div style='color: #6C63FF; font-weight: 700; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;'>Nok-kaew Translation</div><h1 style='color: #1e293b; font-size: 2.4rem; font-weight: 700; margin-top: 0; margin-bottom: 20px; line-height: 1.3;'>{b['ชื่อเรื่อง']}</h1><div style='margin-bottom: 30px; display: flex; gap: 15px; flex-wrap: wrap;'><div style='background: #e0f2fe; color: #0284c7; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📌 สถานะ: {b['สถานะ']}</div><div style='background: #f3e8ff; color: #7e22ce; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📑 {b['ตอนปัจจุบัน']} / {b['เป้าหมาย']} ตอน</div><div style='background: #ffedd5; color: #be185d; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📂 {b['หมวดหมู่']}</div></div><div style='background: white; padding: 25px; border-radius: 20px; border-left: 6px solid #6C63FF; box-shadow: 0 4px 15px rgba(0,0,0,0.02);'><h3 style='color: #475569; margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; font-weight: 600;'>📝 เรื่องย่อ</h3><p style='color: #334155; font-size: 1.05rem; line-height: 1.8; margin-bottom: 0;'>{synopsis_text}</p></div><div style='margin-top: 35px;'><h4 style='color: #64748b; margin-bottom: 15px; font-size: 1rem; font-weight: 500;'>สนับสนุนผู้แปลได้ที่:</h4>{links_html}</div></div></div>"
+        # 🛠️ ทุบโค้ดแบนราบ ป้องกัน Streamlit แทรกแซง HTML 100%
+        # อัปเกรดปุ่ม ReadToon และ KAIREW ตามที่พี่นกแก้วขอเป๊ะๆ 
+        promo_html = f"""<div style="background: linear-gradient(135deg, #ffffff 0%, #f4f6f9 100%); padding: 50px; border-radius: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.06); border: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; max-width: 1000px; margin: 0 auto;"><div style="flex: 0 0 320px;"><img src="{img_url}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.15);" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';"></div><div style="flex: 1; min-width: 300px;"><div style="color: #6C63FF; font-weight: 700; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;">Nok-kaew Translation</div><h1 style="color: #1e293b; font-size: 2.4rem; font-weight: 700; margin-top: 0; margin-bottom: 20px; line-height: 1.3;">{b['ชื่อเรื่อง']}</h1><div style="margin-bottom: 30px; display: flex; gap: 15px; flex-wrap: wrap;"><div style="background: #e0f2fe; color: #0284c7; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;">📌 สถานะ: {b['สถานะ']}</div><div style="background: #f3e8ff; color: #7e22ce; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;">📑 {b['ตอนปัจจุบัน']} / {b['เป้าหมาย']} ตอน</div><div style="background: #ffedd5; color: #be185d; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;">📂 {b['หมวดหมู่']}</div></div><div style="background: white; padding: 25px; border-radius: 20px; border-left: 6px solid #6C63FF; box-shadow: 0 4px 15px rgba(0,0,0,0.02);"><h3 style="color: #475569; margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; font-weight: 600;">📝 เรื่องย่อ</h3><p style="color: #334155; font-size: 1.05rem; line-height: 1.8; margin-bottom: 0;">{synopsis_text}</p></div><div style="margin-top: 35px; background: #faf5ff; padding: 20px; border-radius: 20px; text-align: center; border: 1px dashed #e9d5ff;"><h4 style="color: #9333ea; margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; font-weight: 600;">✨ ติดตามอ่านได้ที่ Facebook: นกแก้วอู้งาน</h4><div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;"><a href="https://readtoon.com/profile/nok1122" target="_blank" style="background: linear-gradient(135deg, #A855F7 0%, #8B5CF6 100%); color: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 10px rgba(168,85,247,0.3); display: inline-block;">📚 ReadToon</a><a href="https://kairew.com/writer-profile/Nok1122" target="_blank" style="background: linear-gradient(135deg, #F97316 0%, #EA580C 100%); color: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 10px rgba(249,115,22,0.3); display: inline-block;">🐉 KAIREW</a></div></div></div></div>"""
         
-        st.markdown(promo_html, unsafe_allow_html=True)
+        # ลบ \n ออกให้หมดเพื่อกัน Streamlit สร้าง Code Block
+        st.markdown(promo_html.replace('\n', ''), unsafe_allow_html=True)
         st.info("📸 **Tip:** เลื่อนจัดหน้าจอให้สวยงาม แล้วแคปเจอร์เพื่อนำไปโพสต์ได้เลยครับ!")
 
     else:
@@ -522,6 +522,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 st.markdown(html_content, unsafe_allow_html=True)
                 return
 
+            # ทุบโค้ดแบนราบให้ Leaderboard ด้วย ป้องกันหน้าพัง
             html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;'>"
             for i, row in enumerate(top_10.itertuples()):
                 img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() else "https://via.placeholder.com/200x300?text=No+Cover"
@@ -529,7 +530,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 html_content += card_html
             
             html_content += "</div></div>"
-            st.markdown(html_content, unsafe_allow_html=True)
+            st.markdown(html_content.replace('\n', ''), unsafe_allow_html=True)
 
         all_m = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
         cur_m = all_m[0] if all_m else None
