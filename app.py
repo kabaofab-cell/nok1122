@@ -3,7 +3,7 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import json
 import plotly.express as px
-from datetime import datetime  # <--- เติมตัวแก้บั๊กให้ตรงนี้แล้วครับ!
+from datetime import datetime
 
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Premium UI)
@@ -19,7 +19,7 @@ st.markdown("""
     .link-badge:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(108, 99, 255, 0.4); }
     .link-badge-orig { background: #FF6584; }
     .btn-delete>div>button { background: #FF4B4B !important; color: white !important; }
-    .metric-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; }
+    .metric-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; margin-bottom: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -29,6 +29,7 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_update(sheet_name, df):
+    """ ฟังก์ชันป้องกันบั๊กแจ้งเตือน 200 OK ของ Streamlit """
     try:
         conn.update(worksheet=sheet_name, data=df)
     except Exception as e:
@@ -103,6 +104,9 @@ st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", 
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "💰 แบ่งรายได้ (QC)", "⚙️ ตั้งค่าระบบ"])
 
+# ------------------------------------------
+# หน้า 1: Dashboard ภาพรวม
+# ------------------------------------------
 if menu == "📊 Dashboard":
     st.title("📊 Dashboard & 🤖 AI สรุปข้อมูล")
     
@@ -110,7 +114,7 @@ if menu == "📊 Dashboard":
     active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
     finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
     
-    df_finance = st.session_state.finance_db
+    df_finance = st.session_state.finance_db.copy()
     total_revenue = 0
     if not df_finance.empty:
         df_finance['ยอดสุทธิ'] = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').fillna(0)
@@ -169,6 +173,9 @@ if menu == "📊 Dashboard":
             st.plotly_chart(fig_plat, use_container_width=True)
         else: st.info("ยังไม่มีข้อมูลรายรับสำหรับสร้างกราฟ")
 
+# ------------------------------------------
+# หน้า 2: คลังนิยาย
+# ------------------------------------------
 elif menu == "📚 คลังนิยาย":
     st.title("📚 จัดการคลังนิยาย")
     col_ref, _ = st.columns([1, 4])
@@ -270,6 +277,9 @@ elif menu == "📚 คลังนิยาย":
             
         st.markdown("</div>", unsafe_allow_html=True)
 
+# ------------------------------------------
+# หน้า 3: บัญชีรายรับ (พร้อมระบบลบข้อมูล)
+# ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บัญชีรายรับ")
     st.info("กรอกข้อมูลรายได้ด้านล่าง ระบบจะคำนวณยอดสุทธิ (หัก 17%) ให้อัตโนมัติ")
@@ -290,14 +300,87 @@ elif menu == "💰 บัญชีรายรับ":
     st.write("#### ✏️ ตารางแก้ไข/ลบข้อมูลรายรับ")
     st.caption("💡 วิธีลบ: ติ๊กถูกที่กล่องสี่เหลี่ยมหน้าแถวที่ต้องการลบ กดไอคอนถังขยะขวาบน แล้วกดปุ่ม 'บันทึกตารางบัญชีล่าสุด' ด้านล่างครับ")
     
-    # --- จุดที่แก้บั๊กคือตรงนี้ครับ (ให้ระบบจำค่าที่แก้/ลบ) ---
     edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
     
     if st.button("💾 บันทึกตารางบัญชีล่าสุด"): 
-        st.session_state.finance_db = edited_finance # อัปเดตข้อมูลใหม่ที่เพิ่งลบ
+        st.session_state.finance_db = edited_finance 
         save_all_to_sheets()
         st.rerun()
+
+# ------------------------------------------
+# หน้า 4: แบ่งรายได้ (QC)
+# ------------------------------------------
+elif menu == "💰 แบ่งรายได้ (QC)":
+    st.title("💰 ระบบสรุปส่วนแบ่งรายได้ (QC)")
+    
+    if st.session_state.finance_db.empty or not st.session_state.books_data:
+        st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้ในระบบ โปรดบันทึกข้อมูลก่อนครับ")
+    else:
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']]
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
         
+        st.markdown("### 📅 ตัวเลือกการดูยอด")
+        c_filter1, c_filter2 = st.columns(2)
+        available_months = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
+        if not available_months: available_months = [datetime.now().strftime('%Y-%m')]
+        sel_month = c_filter1.selectbox("📌 เลือกรอบเดือน", available_months)
+        
+        df_month = df_merge[df_merge['เดือน-ปี'] == sel_month]
+        
+        st.markdown("---")
+        
+        rev_tong = df_month[df_month['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
+        rev_tao = df_month[df_month['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
+        total_m = df_month['ยอดสุทธิ'].sum()
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f"<div class='metric-card'><h3 style='color:#6C63FF;'>💖 ตอง (Tong)</h3><h2>฿{rev_tong:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"<div class='metric-card'><h3 style='color:#FF6584;'>💙 ตาว (Tao)</h3><h2>฿{rev_tao:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"<div class='metric-card'><h3>🌍 ยอดรวมสุทธิ</h3><h2>฿{total_m:,.2f}</h2><p>รายได้รวมของแอดมิน</p></div>", unsafe_allow_html=True)
+
+        st.markdown("### 📈 วิเคราะห์ผลงาน")
+        g1, g2 = st.columns(2)
+        
+        with g1:
+            qc_compare = df_month.groupby('QC')['ยอดสุทธิ'].sum().reset_index()
+            if not qc_compare.empty and qc_compare['ยอดสุทธิ'].sum() > 0:
+                fig_pie = px.pie(qc_compare, values='ยอดสุทธิ', names='QC', title=f'สัดส่วนงานของทีม QC ({sel_month})',
+                                 color='QC', color_discrete_map={'ตอง':'#6C63FF', 'ตาว':'#FF6584'}, hole=0.5)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info("ยังไม่มีข้อมูลเพียงพอสำหรับสร้างกราฟสัดส่วน")
+            
+        with g2:
+            top_books = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=True).tail(5).reset_index()
+            if not top_books.empty and top_books['ยอดสุทธิ'].sum() > 0:
+                fig_bar = px.bar(top_books, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', title=f'🏆 5 อันดับเรื่องทำเงินสูงสุด ({sel_month})',
+                                 text_auto=',.2f', color='ยอดสุทธิ', color_continuous_scale='Purples')
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("ยังไม่มีข้อมูลนิยายทำเงินในเดือนนี้")
+
+        st.markdown("---")
+        st.subheader("📑 รายละเอียดรายได้แยกตามเรื่อง")
+        
+        who = st.multiselect("กรองดูเฉพาะรายชื่อ:", options=['ตอง', 'ตาว'], default=['ตอง', 'ตาว'])
+        df_final = df_month[df_month['QC'].isin(who)]
+        
+        st.dataframe(df_final[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
+        
+        no_qc = df_month[df_month['QC'].isna()]['ชื่อเรื่อง'].unique()
+        if len(no_qc) > 0:
+            st.error(f"⚠️ **ตรวจพบรายได้ที่ไม่มีคนดูแล:** {', '.join(no_qc)} (โปรดไปที่ 'คลังนิยาย' แล้วกดแก้ไขเพื่อใส่ชื่อ QC ให้เรื่องนี้ด้วยครับ)")
+
+# ------------------------------------------
+# หน้า 5: ตั้งค่าระบบ
+# ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
     c1, c2 = st.columns(2)
