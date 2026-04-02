@@ -523,4 +523,3 @@ elif menu == "⚙️ ตั้งค่าระบบ":
         st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
         st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
         save_all_to_sheets(); st.rerun()
-        
