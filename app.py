@@ -21,9 +21,19 @@ st.markdown("""
     .btn-delete>div>button { background: #FF4B4B !important; color: white !important; }
     .metric-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; margin-bottom: 15px; }
     .synopsis-box { background: #F1F3F4; padding: 15px; border-radius: 10px; font-size: 14px; color: #555; margin-top: 10px; border-left: 4px solid #CCC; margin-bottom: 15px; }
-    .top-rank-img { border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
+    
+    /* 🖼️ เวทมนตร์จัดการรูปภาพให้เท่ากันทุกรูป */
+    .cover-img { width: 100%; height: 320px; object-fit: cover; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .rank-img { width: 100%; height: 220px; object-fit: cover; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
+
+# ฟังก์ชันโชว์รูปภาพแบบบังคับขนาด
+def safe_image(url, img_class="cover-img"):
+    if url and str(url).strip() != "":
+        st.markdown(f'<img src="{url}" class="{img_class}">', unsafe_allow_html=True)
+    else:
+        st.info("ไม่มีรูปปก")
 
 # ==========================================
 # 💾 2. ระบบฐานข้อมูล Google Sheets
@@ -82,7 +92,6 @@ def save_all_to_sheets():
             temp['ลิงก์อ่าน'] = json.dumps(b.get('ลิงก์อ่าน', []))
             temp['ลิงก์ต้นฉบับ'] = json.dumps(b.get('ลิงก์ต้นฉบับ', []))
             books_to_save.append(temp)
-        
         df_books_save = pd.DataFrame(books_to_save)
         if df_books_save.empty:
             df_books_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'หมายเหตุ', 'เรื่องย่อ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
@@ -90,12 +99,8 @@ def save_all_to_sheets():
         safe_update("Books", df_books_save)
         safe_update("Finance", st.session_state.finance_db)
         
-        settings_df = pd.DataFrame({
-            "categories": pd.Series(st.session_state.app_settings['categories']),
-            "platforms": pd.Series(st.session_state.app_settings['platforms'])
-        })
+        settings_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
         safe_update("Settings", settings_df)
-        
         st.toast("✅ บันทึกข้อมูลลง Google Sheets สำเร็จ!")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
@@ -114,11 +119,9 @@ menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 ค
 # ------------------------------------------
 if menu == "📊 Dashboard":
     st.title("📊 Dashboard & 🤖 AI สรุปข้อมูล")
-    
     total_books = len(st.session_state.books_data)
     active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
     finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
-    
     df_finance = st.session_state.finance_db.copy()
     total_revenue = 0
     if not df_finance.empty:
@@ -133,20 +136,11 @@ if menu == "📊 Dashboard":
 
     st.markdown("---")
     st.subheader("🤖 AI สรุปวิเคราะห์ข้อมูล (Smart Insights)")
-    
     insights = []
     if total_books > 0:
-        near_finish = []
-        for b in st.session_state.books_data:
-            c_chap = int(b.get('ตอนปัจจุบัน', 0))
-            t_chap = max(int(b.get('เป้าหมาย', 1)), 1)
-            if b.get('สถานะ') == 'กำลังอัปเดต' and (c_chap / t_chap) >= 0.8:
-                near_finish.append(b['ชื่อเรื่อง'])
-                
-        if near_finish:
-            insights.append(f"🎯 **นิยายใกล้จบ:** เตรียมจุดพลุ! เรื่อง **{', '.join(near_finish)}** แปลไปเกิน 80% แล้ว เตรียมแผนโปรโมทตอนจบได้เลยครับ")
-        else:
-            insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่ยังอยู่ในช่วงเร่งปั่น สู้ๆ นะครับแอดมินและทีม QC ทุกคน!")
+        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
+        if near_finish: insights.append(f"🎯 **นิยายใกล้จบ:** เตรียมจุดพลุ! เรื่อง **{', '.join(near_finish)}** แปลไปเกิน 80% แล้ว เตรียมแผนโปรโมทตอนจบได้เลยครับ")
+        else: insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่ยังอยู่ในช่วงเร่งปั่น สู้ๆ นะครับแอดมินและทีม QC ทุกคน!")
             
     if not df_finance.empty and total_revenue > 0:
         try:
@@ -161,8 +155,8 @@ if menu == "📊 Dashboard":
             insights.append("💡 **ข้อมูลรายได้:** กำลังรวบรวมสถิติ เพื่อค้นหาว่านิยายเรื่องไหนคือลูกรักทำเงินของเราครับ!")
 
     for msg in insights: st.success(msg)
+    
     st.markdown("---")
-
     st.subheader("📈 กราฟสรุปภาพรวม")
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
@@ -196,7 +190,6 @@ elif menu == "📚 คลังนิยาย":
             new_cover = c_new2.text_input("ลิงก์รูปปก (ถ้ามี)")
             new_qc = c_new2.radio("ผู้ดูแล (QC)", ["ตอง", "ตาว"], horizontal=True)
             
-            # --- อัปเดตช่องกรอกจำนวนตอน ---
             c_chap1, c_chap2 = st.columns(2)
             new_target = c_chap1.number_input("จำนวนตอนต้นฉบับ (ทั้งหมด)", min_value=1, value=100)
             new_current = c_chap2.number_input("จำนวนตอนที่แปลเสร็จแล้ว", min_value=0, value=0)
@@ -235,8 +228,7 @@ elif menu == "📚 คลังนิยาย":
         img_col, txt_col = st.columns([1, 4])
         
         with img_col:
-            if b.get('ภาพปก'): st.image(b['ภาพปก'], use_container_width=True)
-            else: st.info("ไม่มีรูปปก")
+            safe_image(b.get('ภาพปก'), "cover-img") # เรียกใช้รูปพร้อม CSS ควบคุมขนาด
             
         with txt_col:
             h_col1, h_col2, h_col3 = st.columns([3, 1, 1])
@@ -251,9 +243,8 @@ elif menu == "📚 คลังนิยาย":
             st.write(f"**หมวดหมู่:** {b['หมวดหมู่']} | **QC:** {b.get('QC','-')} | **สถานะ:** {b.get('สถานะ', 'กำลังอัปเดต')}")
             if b.get('เรื่องย่อ'): st.markdown(f"<div class='synopsis-box'><b>เรื่องย่อ:</b><br>{b['เรื่องย่อ']}</div>", unsafe_allow_html=True)
             
-            # --- คำนวณหลอดความคืบหน้าแบบใหม่ ---
             c_chap = int(b.get('ตอนปัจจุบัน', 0))
-            t_chap = max(int(b.get('เป้าหมาย', 1)), 1) # ป้องกันหารด้วย 0
+            t_chap = max(int(b.get('เป้าหมาย', 1)), 1)
             progress_val = min(int((c_chap / t_chap) * 100), 100)
             
             st.progress(progress_val)
@@ -285,11 +276,8 @@ elif menu == "📚 คลังนิยาย":
             e_title = e1.text_input("ชื่อเรื่อง", value=b['ชื่อเรื่อง'], key=f"t_{idx}")
             e_cover = e1.text_input("ภาพปก", value=b.get('ภาพปก',''), key=f"c_{idx}")
             e_stat = e2.selectbox("สถานะ", ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], index=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"].index(b.get('สถานะ','กำลังอัปเดต')) if b.get('สถานะ') in ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"] else 0, key=f"s_{idx}")
-            
-            # --- อัปเดตช่องแก้ไขจำนวนตอน ---
             e_tgt = e2.number_input("จำนวนตอนต้นฉบับ", value=int(b.get('เป้าหมาย',1)), key=f"tgt_{idx}")
             e_curr = e2.number_input("จำนวนตอนที่แปลเสร็จแล้ว", value=int(b.get('ตอนปัจจุบัน',0)), key=f"curr_{idx}")
-            
             e_synopsis = st.text_area("📔 เรื่องย่อ", value=b.get('เรื่องย่อ',''), key=f"syn_{idx}")
             e_note = st.text_area("📝 หมายเหตุ (Note)", value=b.get('หมายเหตุ',''), key=f"n_{idx}")
             
@@ -449,8 +437,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                     if i + j < len(top_10):
                         row = top_10.iloc[i+j]
                         with col:
-                            if row['ภาพปก']: st.image(row['ภาพปก'], use_container_width=True)
-                            else: st.info("ไม่มีปก")
+                            safe_image(row['ภาพปก'], "rank-img") # บังคับขนาดภาพในหน้า Leaderboard
                             st.markdown(f"**#{i+j+1}** {row['ชื่อเรื่อง']}")
                             st.caption(f"ยอด: ฿{row['ยอดสุทธิ']:,.2f}")
 
@@ -464,6 +451,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
         st.markdown("---")
 
         st.subheader("👥 Top 10 แยกตามผู้ดูแล (QC)")
+        # แก้ไขบั๊ก t1, t2, t3 เป็นแท็บ 3 แท็บ
         tab_qc_tong, tab_qc_tao = st.tabs(["💖 ผลงานของ ตอง", "💙 ผลงานของ ตาว"])
         
         with tab_qc_tong:
