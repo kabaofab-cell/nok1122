@@ -294,12 +294,14 @@ elif menu == "📚 คลังนิยาย":
                 st.write("**📖 ลิงก์อ่าน**")
                 df_read = pd.DataFrame(b.get('ลิงก์อ่าน', [{"url":"", "note":""}]))
                 if df_read.empty: df_read = pd.DataFrame([{"url":"", "note":""}])
-                edited_read = st.data_editor(df_read, num_rows="dynamic", use_container_width=True)
+                # 🛠️ แก้ไขบั๊ก Streamlit Duplicate Element โดยการใส่ key แบบเฉพาะเจาะจง
+                edited_read = st.data_editor(df_read, num_rows="dynamic", use_container_width=True, key=f"edit_read_{idx}")
             with l2:
                 st.write("**🇰🇷 ลิงก์ต้นฉบับ**")
                 df_orig = pd.DataFrame(b.get('ลิงก์ต้นฉบับ', [{"url":"", "note":""}]))
                 if df_orig.empty: df_orig = pd.DataFrame([{"url":"", "note":""}])
-                edited_orig = st.data_editor(df_orig, num_rows="dynamic", use_container_width=True)
+                # 🛠️ แก้ไขบั๊ก Streamlit Duplicate Element
+                edited_orig = st.data_editor(df_orig, num_rows="dynamic", use_container_width=True, key=f"edit_orig_{idx}")
 
             sv_col, del_col = st.columns(2)
             if sv_col.button("💾 บันทึกการเปลี่ยนแปลง", type="primary"):
@@ -322,7 +324,7 @@ elif menu == "📚 คลังนิยาย":
             st.dataframe(df_this[['วันที่', 'แพลตฟอร์ม', 'ยอดสุทธิ']].sort_values('วันที่', ascending=False), use_container_width=True)
         else: st.warning("ยังไม่มีการบันทึกรายได้")
 
-    # 📌 โหมดแกลลอรี่
+    # 📌 โหมดแกลลอรี่ (Gallery View)
     else:
         st.title("📚 จัดการคลังนิยาย")
         col_ref, _ = st.columns([1, 4])
@@ -357,6 +359,7 @@ elif menu == "📚 คลังนิยาย":
             b['_orig_idx'] = idx 
             filtered_books.append(b)
 
+        # วาดแกลลอรี่นิยาย 4 คอลัมน์
         for i in range(0, len(filtered_books), 4):
             cols = st.columns(4)
             for j, col in enumerate(cols):
@@ -380,7 +383,7 @@ elif menu == "📚 คลังนิยาย":
 # ⚡ หน้า 3: แก้ไขด่วน (Quick Edit)
 # ------------------------------------------
 elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
-    st.title("⚡ ระบบแก้ไขด่วนแบบตาราง")
+    st.title("⚡ ระบบแก้ไขด่วนแบบตาราง (Quick Edit)")
     st.info("💡 แก้ไขข้อมูลในตารางได้อิสระ แล้วกดปุ่ม 'บันทึกการเปลี่ยนแปลงทั้งหมด' ด้านล่างเพื่ออัปเดตพร้อมกัน")
     if not st.session_state.books_data: st.warning("ไม่มีข้อมูลนิยาย")
     else:
@@ -391,7 +394,7 @@ elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
             column_config={
                 "หมวดหมู่": st.column_config.SelectboxColumn("หมวดหมู่", options=st.session_state.app_settings['categories'], required=True),
                 "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True),
-                "QC": st.column_config.SelectboxColumn("QC", options=["ตอง", "ตาว"], required=True),
+                "QC": st.column_config.SelectboxColumn("ผู้ดูแล (QC)", options=["ตอง", "ตาว"], required=True),
                 "ตอนปัจจุบัน": st.column_config.NumberColumn("แปลแล้ว (ตอน)", min_value=0),
                 "เป้าหมาย": st.column_config.NumberColumn("ต้นฉบับ (ตอน)", min_value=1)
             }, use_container_width=True, num_rows="fixed", height=500
@@ -418,7 +421,6 @@ elif menu == "📢 แนะนำนิยาย":
         
         img_url = b.get('ภาพปก') if b.get('ภาพปก') else "https://via.placeholder.com/300x450?text=No+Cover"
         
-        # 🛡️ ระบบดักจับบั๊ก Null-safe (เปลี่ยนค่าว่างให้เป็น string ก่อนจัดบรรทัด)
         synopsis_val = str(b.get('เรื่องย่อ', ''))
         if not synopsis_val or synopsis_val.strip() == '' or synopsis_val.lower() == 'nan':
             synopsis_text = 'ยังไม่มีการระบุเรื่องย่อสำหรับนิยายเรื่องนี้'
