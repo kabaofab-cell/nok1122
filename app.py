@@ -52,6 +52,8 @@ def load_data():
             b['หมายเหตุ'] = b.get('หมายเหตุ', '')
             b['เรื่องย่อ'] = b.get('เรื่องย่อ', '')
             b['ภาพปก'] = b.get('ภาพปก', '')
+            b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
+            b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
         st.session_state.books_data = books
     except:
         st.session_state.books_data = []
@@ -134,7 +136,13 @@ if menu == "📊 Dashboard":
     
     insights = []
     if total_books > 0:
-        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and int(b.get('ตอนปัจจุบัน', 0)) >= int(b.get('เป้าหมาย', 150)) * 0.8]
+        near_finish = []
+        for b in st.session_state.books_data:
+            c_chap = int(b.get('ตอนปัจจุบัน', 0))
+            t_chap = max(int(b.get('เป้าหมาย', 1)), 1)
+            if b.get('สถานะ') == 'กำลังอัปเดต' and (c_chap / t_chap) >= 0.8:
+                near_finish.append(b['ชื่อเรื่อง'])
+                
         if near_finish:
             insights.append(f"🎯 **นิยายใกล้จบ:** เตรียมจุดพลุ! เรื่อง **{', '.join(near_finish)}** แปลไปเกิน 80% แล้ว เตรียมแผนโปรโมทตอนจบได้เลยครับ")
         else:
@@ -182,18 +190,24 @@ elif menu == "📚 คลังนิยาย":
 
     with st.expander("✨ เพิ่มนิยายเรื่องใหม่"):
         with st.form("add_book_form"):
-            c1, c2 = st.columns(2)
-            new_title = c1.text_input("ชื่อเรื่องนิยาย")
-            new_cat = c1.selectbox("หมวดหมู่", st.session_state.app_settings['categories'])
-            new_cover = c2.text_input("ลิงก์รูปปก (ถ้ามี)")
-            new_qc = c2.radio("ผู้ดูแล (QC)", ["ตอง", "ตาว"], horizontal=True)
+            c_new1, c_new2 = st.columns(2)
+            new_title = c_new1.text_input("ชื่อเรื่องนิยาย")
+            new_cat = c_new1.selectbox("หมวดหมู่", st.session_state.app_settings['categories'])
+            new_cover = c_new2.text_input("ลิงก์รูปปก (ถ้ามี)")
+            new_qc = c_new2.radio("ผู้ดูแล (QC)", ["ตอง", "ตาว"], horizontal=True)
+            
+            # --- อัปเดตช่องกรอกจำนวนตอน ---
+            c_chap1, c_chap2 = st.columns(2)
+            new_target = c_chap1.number_input("จำนวนตอนต้นฉบับ (ทั้งหมด)", min_value=1, value=100)
+            new_current = c_chap2.number_input("จำนวนตอนที่แปลเสร็จแล้ว", min_value=0, value=0)
+            
             new_synopsis = st.text_area("📔 เรื่องย่อ")
             
             if st.form_submit_button("บันทึกนิยายเรื่องใหม่"):
                 if new_title:
                     new_entry = {
                         'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 
-                        'ตอนปัจจุบัน': 0, 'เป้าหมาย': 150, 'ภาพปก': new_cover, 'หมายเหตุ': '', 
+                        'ตอนปัจจุบัน': new_current, 'เป้าหมาย': new_target, 'ภาพปก': new_cover, 'หมายเหตุ': '', 
                         'เรื่องย่อ': new_synopsis, 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []
                     }
                     st.session_state.books_data.append(new_entry)
@@ -236,8 +250,14 @@ elif menu == "📚 คลังนิยาย":
 
             st.write(f"**หมวดหมู่:** {b['หมวดหมู่']} | **QC:** {b.get('QC','-')} | **สถานะ:** {b.get('สถานะ', 'กำลังอัปเดต')}")
             if b.get('เรื่องย่อ'): st.markdown(f"<div class='synopsis-box'><b>เรื่องย่อ:</b><br>{b['เรื่องย่อ']}</div>", unsafe_allow_html=True)
-            st.progress(min(int(b.get('ตอนปัจจุบัน',0)/max(b.get('เป้าหมาย',1),1)*100), 100))
-            st.caption(f"ตอนที่: {b.get('ตอนปัจจุบัน',0)} / {b.get('เป้าหมาย',150)}")
+            
+            # --- คำนวณหลอดความคืบหน้าแบบใหม่ ---
+            c_chap = int(b.get('ตอนปัจจุบัน', 0))
+            t_chap = max(int(b.get('เป้าหมาย', 1)), 1) # ป้องกันหารด้วย 0
+            progress_val = min(int((c_chap / t_chap) * 100), 100)
+            
+            st.progress(progress_val)
+            st.caption(f"ความคืบหน้า: แปลแล้ว {c_chap} / ต้นฉบับ {t_chap} ตอน ({progress_val}%)")
 
             if b.get('ลิงก์อ่าน'):
                 links_html = "".join([f"<a href='{l.get('url','')}' target='_blank' class='link-badge'>🔗 {l.get('note','ลิงก์อ่าน')}</a>" for l in b['ลิงก์อ่าน'] if l.get('url')])
@@ -265,7 +285,11 @@ elif menu == "📚 คลังนิยาย":
             e_title = e1.text_input("ชื่อเรื่อง", value=b['ชื่อเรื่อง'], key=f"t_{idx}")
             e_cover = e1.text_input("ภาพปก", value=b.get('ภาพปก',''), key=f"c_{idx}")
             e_stat = e2.selectbox("สถานะ", ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], index=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"].index(b.get('สถานะ','กำลังอัปเดต')) if b.get('สถานะ') in ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"] else 0, key=f"s_{idx}")
-            e_curr = e2.number_input("ตอนปัจจุบัน", value=int(b.get('ตอนปัจจุบัน',0)), key=f"curr_{idx}")
+            
+            # --- อัปเดตช่องแก้ไขจำนวนตอน ---
+            e_tgt = e2.number_input("จำนวนตอนต้นฉบับ", value=int(b.get('เป้าหมาย',1)), key=f"tgt_{idx}")
+            e_curr = e2.number_input("จำนวนตอนที่แปลเสร็จแล้ว", value=int(b.get('ตอนปัจจุบัน',0)), key=f"curr_{idx}")
+            
             e_synopsis = st.text_area("📔 เรื่องย่อ", value=b.get('เรื่องย่อ',''), key=f"syn_{idx}")
             e_note = st.text_area("📝 หมายเหตุ (Note)", value=b.get('หมายเหตุ',''), key=f"n_{idx}")
             
@@ -284,7 +308,7 @@ elif menu == "📚 คลังนิยาย":
             sv_col, del_col = st.columns(2)
             if sv_col.button("💾 บันทึกการแก้ไข", key=f"save_{idx}"):
                 st.session_state.books_data[idx].update({
-                    'ชื่อเรื่อง': e_title, 'ภาพปก': e_cover, 'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 
+                    'ชื่อเรื่อง': e_title, 'ภาพปก': e_cover, 'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt,
                     'เรื่องย่อ': e_synopsis, 'หมายเหตุ': e_note,
                     'ลิงก์อ่าน': [r for r in edited_read.to_dict('records') if r.get('url')],
                     'ลิงก์ต้นฉบับ': [r for r in edited_orig.to_dict('records') if r.get('url')]
@@ -367,7 +391,7 @@ elif menu == "💰 แบ่งรายได้ (QC)":
         st.dataframe(df_final[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 5: อันดับนิยายขายดี (จัดเต็ม Top 10 + AI + รูปปก)
+# 🏆 หน้า 5: อันดับนิยายขายดี
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี & AI วิเคราะห์ผลงาน")
@@ -375,7 +399,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
     if st.session_state.finance_db.empty or not st.session_state.books_data:
         st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้เพียงพอสำหรับการจัดอันดับครับ")
     else:
-        # เตรียมข้อมูล (รวมข้อมูลเงิน + รูปปก + QC)
         df_fin = st.session_state.finance_db.copy()
         df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'ภาพปก']]
         df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
@@ -383,10 +406,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
         df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
         df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
 
-        # --- ส่วนที่ 1: AI วิเคราะห์และให้คำแนะนำ ---
         st.subheader("🤖 AI สรุปแนวโน้มและให้คำแนะนำ")
-        
-        # เลือกรอบเดือนล่าสุดที่มีข้อมูล
         all_months = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
         current_m = all_months[0] if all_months else None
         
@@ -405,7 +425,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
             
             st.info(ai_msg)
 
-        # กราฟแนวโน้ม (Trend Line)
         trend_df = df_merge.groupby(['เดือน-ปี', 'QC'])['ยอดสุทธิ'].sum().reset_index()
         if not trend_df.empty:
             fig_trend = px.line(trend_df, x='เดือน-ปี', y='ยอดสุทธิ', color='QC', markers=True, 
@@ -415,7 +434,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        # ฟังก์ชันช่วยวาดกล่อง Top 10 พร้อมรูปปก
         def draw_top_10(df_source, title):
             st.markdown(f"#### {title}")
             top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
@@ -425,7 +443,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 st.write("ยังไม่มีข้อมูล")
                 return
                 
-            # วาดแถวละ 5 เรื่อง
             for i in range(0, len(top_10), 5):
                 cols = st.columns(5)
                 for j, col in enumerate(cols):
@@ -437,7 +454,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
                             st.markdown(f"**#{i+j+1}** {row['ชื่อเรื่อง']}")
                             st.caption(f"ยอด: ฿{row['ยอดสุทธิ']:,.2f}")
 
-        # --- ส่วนที่ 2: Top 10 ภาพรวม ---
         st.subheader("🌍 Top 10 ขายดีภาพรวม (ทั้งหมด)")
         tab_all_m, tab_all_t = st.tabs(["📅 ประจำเดือนล่าสุด", "🌟 ตลอดกาล (All-Time)"])
         with tab_all_m:
@@ -447,7 +463,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        # --- ส่วนที่ 3: Top 10 แยกตาม QC (ตอง / ตาว) ---
         st.subheader("👥 Top 10 แยกตามผู้ดูแล (QC)")
         tab_qc_tong, tab_qc_tao = st.tabs(["💖 ผลงานของ ตอง", "💙 ผลงานของ ตาว"])
         
@@ -464,7 +479,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
             with c_tao1: 
                 if current_m: draw_top_10(df_tao[df_tao['เดือน-ปี'] == current_m], "ประจำเดือนล่าสุด")
             with c_tao2: draw_top_10(df_tao, "ตลอดกาล (All-Time)")
-
 
 # ------------------------------------------
 # ⚙️ หน้า 6: ตั้งค่าระบบ
