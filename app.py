@@ -131,7 +131,7 @@ if menu == "📊 Dashboard":
 
     st.markdown("---")
 
-    # --- 3. โหมด AI สรุปข้อมูล (Smart Insights) ---
+   # --- 3. โหมด AI สรุปข้อมูล (Smart Insights) ---
     st.subheader("🤖 AI สรุปวิเคราะห์ข้อมูล (Smart Insights)")
     
     insights = []
@@ -144,12 +144,21 @@ if menu == "📊 Dashboard":
         else:
             insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่ยังอยู่ในช่วงเร่งปั่น สู้ๆ นะครับแอดมินและทีม QC ทุกคน!")
             
-    # วิเคราะห์การเงินและรายได้
+    # วิเคราะห์การเงินและรายได้ (ใส่เกราะป้องกัน Error idxmax)
     if not df_finance.empty and total_revenue > 0:
-        top_platform = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().idxmax()
-        top_book = df_finance.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
-        insights.append(f"🏆 **ลูกรักทำเงิน:** นิยายที่ทำรายได้รวมสูงสุดให้เราตอนนี้คือเรื่อง **{top_book}** ปังมากครับ!")
-        insights.append(f"📈 **ขุมทรัพย์หลัก:** **{top_platform}** คือแพลตฟอร์มที่ทำเงินให้เรามากที่สุด อย่าลืมเข้าไปอัปเดตนิยายสม่ำเสมอนะครับ")
+        try:
+            # จับกลุ่มข้อมูลก่อน
+            grouped_plat = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum()
+            grouped_book = df_finance.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum()
+            
+            # ถ้ากลุ่มข้อมูลไม่ว่างเปล่า ค่อยหาแชมป์
+            if not grouped_plat.empty and not grouped_book.empty:
+                top_platform = grouped_plat.idxmax()
+                top_book = grouped_book.idxmax()
+                insights.append(f"🏆 **ลูกรักทำเงิน:** นิยายที่ทำรายได้รวมสูงสุดให้เราตอนนี้คือเรื่อง **{top_book}** ปังมากครับ!")
+                insights.append(f"📈 **ขุมทรัพย์หลัก:** **{top_platform}** คือแพลตฟอร์มที่ทำเงินให้เรามากที่สุด อย่าลืมเข้าไปอัปเดตนิยายสม่ำเสมอนะครับ")
+        except:
+            insights.append("💡 **ข้อมูลรายได้:** กำลังรวบรวมสถิติ เพื่อค้นหาว่านิยายเรื่องไหนคือลูกรักทำเงินของเราครับ!")
     else:
         insights.append("💰 **บัญชีรายรับ:** ระบบรอพี่นกแก้วมาบันทึกยอดขายก้อนแรกอยู่นะครับ!")
 
