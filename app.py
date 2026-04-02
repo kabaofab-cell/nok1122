@@ -86,13 +86,13 @@ st.markdown("""
         background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); 
         border: 1px solid #bae6fd; border-radius: 24px; 
         padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); 
-        margin-bottom: 20px;
+        margin-bottom: 20px; height: 100%;
     }
     .split-box-pink { 
         background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); 
         border: 1px solid #fbcfe8; border-radius: 24px; 
         padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); 
-        margin-bottom: 20px;
+        margin-bottom: 20px; height: 100%;
     }
     
     /* 🖼️ เวทมนตร์จัดการรูปให้เท่ากัน (Aspect-Ratio 2:3 แบบปกนิยาย) */
@@ -429,7 +429,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 6: อันดับนิยายขายดี (กล่องไม่หลุด)
+# 🏆 หน้า 6: อันดับนิยายขายดี (กล่องเรียบเนียน ไม่ทะลุ)
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -451,13 +451,12 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        # ฟังก์ชันวาด Top 10 แบบผสาน HTML (ป้องกันกล่องทะลุ)
+        # 🛠️ ฟังก์ชันวาด Top 10 แบบทุบโค้ดให้แบน ป้องกัน Streamlit แทรกแซง
         def draw_top_10_html(df_source, title, box_class):
             top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
             top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
             
-            html_content = f"<div class='{box_class}'>"
-            html_content += f"<h3 style='text-align:center; color:#2C3E50; margin-bottom:25px;'>{title}</h3>"
+            html_content = f"<div class='{box_class}'><h3 style='text-align:center; color:#2C3E50; margin-bottom:25px;'>{title}</h3>"
             
             if top_10.empty:
                 html_content += "<p style='text-align:center; color:#888;'>ยังไม่มีข้อมูล</p></div>"
@@ -467,13 +466,10 @@ elif menu == "🏆 อันดับนิยายขายดี":
             html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;'>"
             for i, row in enumerate(top_10.itertuples()):
                 img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() else "https://via.placeholder.com/200x300?text=No+Cover"
-                html_content += f"""
-                <div class='rank-card'>
-                    <img src='{img_url}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:8px;' onerror="this.onerror=null;this.src='https://via.placeholder.com/200x300?text=Error';">
-                    <div style='font-size:13px; line-height:1.2; margin-bottom:4px; font-weight:600; color:#333;'><b>#{i+1}</b> {row.ชื่อเรื่อง}</div>
-                    <div style='color:#6C63FF; font-weight:bold; font-size:15px;'>฿{row.ยอดสุทธิ:,.0f}</div>
-                </div>
-                """
+                # ทุบเป็นบรรทัดเดียว ป้องกันโค้ดแตก
+                card_html = f"<div class='rank-card'><img src='{img_url}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:8px;' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/200x300?text=Error';\"><div style='font-size:13px; line-height:1.2; margin-bottom:4px; font-weight:600; color:#333;'><b>#{i+1}</b> {row.ชื่อเรื่อง}</div><div style='color:#6C63FF; font-weight:bold; font-size:15px;'>฿{row.ยอดสุทธิ:,.0f}</div></div>"
+                html_content += card_html
+            
             html_content += "</div></div>"
             st.markdown(html_content, unsafe_allow_html=True)
 
