@@ -105,25 +105,82 @@ st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", 
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "⚙️ ตั้งค่าระบบ"])
 
+# ------------------------------------------
+# หน้า 1: Dashboard (จัดเต็ม + AI สรุป)
+# ------------------------------------------
 if menu == "📊 Dashboard":
-    st.title("📊 Dashboard ภาพรวม")
+    st.title("📊 Dashboard & 🤖 AI สรุปข้อมูล")
+    
+    # --- 1. คำนวณสถิติพื้นฐาน ---
     total_books = len(st.session_state.books_data)
     active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
     finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
     
+    df_finance = st.session_state.finance_db
     total_revenue = 0
-    if not st.session_state.finance_db.empty:
-        total_revenue = pd.to_numeric(st.session_state.finance_db['ยอดสุทธิ'], errors='coerce').sum()
+    if not df_finance.empty:
+        df_finance['ยอดสุทธิ'] = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').fillna(0)
+        total_revenue = df_finance['ยอดสุทธิ'].sum()
 
+    # --- 2. การ์ดสรุปตัวเลข ---
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books} เรื่อง</h2></div>", unsafe_allow_html=True)
-    with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังอัปเดต</h3><h2>{active_books} เรื่อง</h2></div>", unsafe_allow_html=True)
+    with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books} เรื่อง</h2></div>", unsafe_allow_html=True)
     with col3: st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books} เรื่อง</h2></div>", unsafe_allow_html=True)
-    with col4: st.markdown(f"<div class='metric-card'><h3>💰 ยอดรายได้สุทธิ</h3><h2>฿{total_revenue:,.2f}</h2></div>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิ</h3><h2>฿{total_revenue:,.2f}</h2></div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
-elif menu == "📚 คลังนิยาย":
+    # --- 3. โหมด AI สรุปข้อมูล (Smart Insights) ---
+    st.subheader("🤖 AI สรุปวิเคราะห์ข้อมูล (Smart Insights)")
+    
+    insights = []
+    
+    # วิเคราะห์ความคืบหน้านิยาย
+    if total_books > 0:
+        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and int(b.get('ตอนปัจจุบัน', 0)) >= int(b.get('เป้าหมาย', 150)) * 0.8]
+        if near_finish:
+            insights.append(f"🎯 **นิยายใกล้จบ:** เตรียมจุดพลุ! เรื่อง **{', '.join(near_finish)}** แปลไปเกิน 80% แล้ว เตรียมแผนโปรโมทตอนจบได้เลยครับ")
+        else:
+            insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่ยังอยู่ในช่วงเร่งปั่น สู้ๆ นะครับแอดมินและทีม QC ทุกคน!")
+            
+    # วิเคราะห์การเงินและรายได้
+    if not df_finance.empty and total_revenue > 0:
+        top_platform = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().idxmax()
+        top_book = df_finance.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+        insights.append(f"🏆 **ลูกรักทำเงิน:** นิยายที่ทำรายได้รวมสูงสุดให้เราตอนนี้คือเรื่อง **{top_book}** ปังมากครับ!")
+        insights.append(f"📈 **ขุมทรัพย์หลัก:** **{top_platform}** คือแพลตฟอร์มที่ทำเงินให้เรามากที่สุด อย่าลืมเข้าไปอัปเดตนิยายสม่ำเสมอนะครับ")
+    else:
+        insights.append("💰 **บัญชีรายรับ:** ระบบรอพี่นกแก้วมาบันทึกยอดขายก้อนแรกอยู่นะครับ!")
+
+    # แสดงผลข้อความจาก AI
+    for msg in insights:
+        st.success(msg)
+
+    st.markdown("---")
+
+    # --- 4. กราฟภาพรวม (Charts) ---
+    st.subheader("📈 กราฟสรุปภาพรวม")
+    chart_col1, chart_col2 = st.columns(2)
+    
+    with chart_col1:
+        if total_books > 0:
+            df_books = pd.DataFrame(st.session_state.books_data)
+            cat_counts = df_books['หมวดหมู่'].value_counts().reset_index()
+            cat_counts.columns = ['หมวดหมู่', 'จำนวน']
+            fig_cat = px.pie(cat_counts, values='จำนวน', names='หมวดหมู่', title='สัดส่วนนิยายแยกตามหมวดหมู่', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+            st.plotly_chart(fig_cat, use_container_width=True)
+        else:
+            st.info("ยังไม่มีข้อมูลนิยายสำหรับสร้างกราฟ")
+
+    with chart_col2:
+        if not df_finance.empty and total_revenue > 0:
+            plat_rev = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().reset_index()
+            fig_plat = px.bar(plat_rev, x='แพลตฟอร์ม', y='ยอดสุทธิ', title='รายได้สุทธิแยกตามแพลตฟอร์ม', text='ยอดสุทธิ', color='แพลตฟอร์ม', color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_plat.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
+            st.plotly_chart(fig_plat, use_container_width=True)
+        else:
+            st.info("ยังไม่มีข้อมูลรายรับสำหรับสร้างกราฟ")
     st.title("📚 จัดการคลังนิยาย")
     col_ref, _ = st.columns([1, 4])
     if col_ref.button("🔄 ดึงข้อมูลล่าสุด"): load_data(); st.rerun()
