@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import json
-
+import plotly.express as px
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Premium UI)
 # ==========================================
