@@ -86,19 +86,19 @@ st.markdown("""
         background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); 
         border: 1px solid #bae6fd; border-radius: 24px; 
         padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); 
-        height: 100%; margin-bottom: 20px;
+        margin-bottom: 20px;
     }
     .split-box-pink { 
         background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); 
         border: 1px solid #fbcfe8; border-radius: 24px; 
         padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); 
-        height: 100%; margin-bottom: 20px;
+        margin-bottom: 20px;
     }
     
     /* 🖼️ เวทมนตร์จัดการรูปให้เท่ากัน (Aspect-Ratio 2:3 แบบปกนิยาย) */
     .cover-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 16px; box-shadow: 0 6px 15px rgba(0,0,0,0.08); }
-    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; transition: 0.3s; }
-    .rank-img:hover { transform: scale(1.05); }
+    .rank-card { transition: 0.3s ease; text-align: center; }
+    .rank-card:hover { transform: scale(1.03); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -429,7 +429,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 6: อันดับนิยายขายดี (แยกสีกล่อง ฟ้า/ชมพู)
+# 🏆 หน้า 6: อันดับนิยายขายดี (กล่องไม่หลุด)
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -451,22 +451,31 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        def draw_top_10(df_source, title):
-            st.markdown(f"<h3 style='text-align:center; color:#2C3E50; margin-bottom:20px;'>{title}</h3>", unsafe_allow_html=True)
+        # ฟังก์ชันวาด Top 10 แบบผสาน HTML (ป้องกันกล่องทะลุ)
+        def draw_top_10_html(df_source, title, box_class):
             top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
             top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
-            if top_10.empty: st.info("ยังไม่มีข้อมูล"); return
             
-            for i in range(0, len(top_10), 3):
-                cols = st.columns(3)
-                for j, col in enumerate(cols):
-                    if i + j < len(top_10):
-                        row = top_10.iloc[i+j]
-                        with col:
-                            safe_image(row['ภาพปก'], "rank-img")
-                            st.markdown(f"<div style='text-align:center; font-size:14px; line-height:1.2; margin-bottom:5px;'><b>#{i+j+1}</b> {row['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<div style='text-align:center; color:#6C63FF; font-weight:bold; font-size:15px;'>฿{row['ยอดสุทธิ']:,.0f}</div>", unsafe_allow_html=True)
-                            st.markdown("<br>", unsafe_allow_html=True)
+            html_content = f"<div class='{box_class}'>"
+            html_content += f"<h3 style='text-align:center; color:#2C3E50; margin-bottom:25px;'>{title}</h3>"
+            
+            if top_10.empty:
+                html_content += "<p style='text-align:center; color:#888;'>ยังไม่มีข้อมูล</p></div>"
+                st.markdown(html_content, unsafe_allow_html=True)
+                return
+
+            html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;'>"
+            for i, row in enumerate(top_10.itertuples()):
+                img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() else "https://via.placeholder.com/200x300?text=No+Cover"
+                html_content += f"""
+                <div class='rank-card'>
+                    <img src='{img_url}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:8px;' onerror="this.onerror=null;this.src='https://via.placeholder.com/200x300?text=Error';">
+                    <div style='font-size:13px; line-height:1.2; margin-bottom:4px; font-weight:600; color:#333;'><b>#{i+1}</b> {row.ชื่อเรื่อง}</div>
+                    <div style='color:#6C63FF; font-weight:bold; font-size:15px;'>฿{row.ยอดสุทธิ:,.0f}</div>
+                </div>
+                """
+            html_content += "</div></div>"
+            st.markdown(html_content, unsafe_allow_html=True)
 
         all_m = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
         cur_m = all_m[0] if all_m else None
@@ -474,41 +483,28 @@ elif menu == "🏆 อันดับนิยายขายดี":
         st.subheader("🌍 Top 10 ขายดีภาพรวม (ทั้งหมด)")
         col_all1, col_all2 = st.columns(2)
         with col_all1:
-            st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
-            if cur_m: draw_top_10(df_merge[df_merge['เดือน-ปี'] == cur_m], f"📅 ประจำเดือน {cur_m}")
-            st.markdown("</div>", unsafe_allow_html=True)
+            if cur_m: draw_top_10_html(df_merge[df_merge['เดือน-ปี'] == cur_m], f"📅 ประจำเดือน {cur_m}", "split-box-blue")
         with col_all2:
-            st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
-            draw_top_10(df_merge, "🌟 ตลอดกาล (All-Time)")
-            st.markdown("</div>", unsafe_allow_html=True)
+            draw_top_10_html(df_merge, "🌟 ตลอดกาล (All-Time)", "split-box-pink")
 
         st.markdown("---")
-        
         st.subheader("👥 Top 10 แยกตามผู้ดูแล (QC)")
         t3, t4 = st.tabs(["💖 ผลงานของ ตอง", "💙 ผลงานของ ตาว"])
         with t3:
             df_tong = df_merge[df_merge['QC'] == 'ตอง']
             c_tong1, c_tong2 = st.columns(2)
             with c_tong1: 
-                st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
-                if cur_m: draw_top_10(df_tong[df_tong['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด")
-                st.markdown("</div>", unsafe_allow_html=True)
+                if cur_m: draw_top_10_html(df_tong[df_tong['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด", "split-box-blue")
             with c_tong2: 
-                st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
-                draw_top_10(df_tong, "🌟 ตลอดกาล")
-                st.markdown("</div>", unsafe_allow_html=True)
+                draw_top_10_html(df_tong, "🌟 ตลอดกาล", "split-box-pink")
                 
         with t4:
             df_tao = df_merge[df_merge['QC'] == 'ตาว']
             c_tao1, c_tao2 = st.columns(2)
             with c_tao1: 
-                st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
-                if cur_m: draw_top_10(df_tao[df_tao['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด")
-                st.markdown("</div>", unsafe_allow_html=True)
+                if cur_m: draw_top_10_html(df_tao[df_tao['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด", "split-box-blue")
             with c_tao2: 
-                st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
-                draw_top_10(df_tao, "🌟 ตลอดกาล")
-                st.markdown("</div>", unsafe_allow_html=True)
+                draw_top_10_html(df_tao, "🌟 ตลอดกาล", "split-box-pink")
 
 # ------------------------------------------
 # ⚙️ หน้า 7: ตั้งค่าระบบ
@@ -527,3 +523,4 @@ elif menu == "⚙️ ตั้งค่าระบบ":
         st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
         st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
         save_all_to_sheets(); st.rerun()
+        
