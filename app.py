@@ -21,6 +21,7 @@ st.markdown("""
     .btn-delete>div>button { background: #FF4B4B !important; color: white !important; }
     .metric-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; margin-bottom: 15px; }
     .synopsis-box { background: #F1F3F4; padding: 15px; border-radius: 10px; font-size: 14px; color: #555; margin-top: 10px; border-left: 4px solid #CCC; margin-bottom: 15px; }
+    .top-rank-img { border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -50,6 +51,7 @@ def load_data():
             b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
             b['หมายเหตุ'] = b.get('หมายเหตุ', '')
             b['เรื่องย่อ'] = b.get('เรื่องย่อ', '')
+            b['ภาพปก'] = b.get('ภาพปก', '')
         st.session_state.books_data = books
     except:
         st.session_state.books_data = []
@@ -103,7 +105,7 @@ if 'books_data' not in st.session_state: load_data()
 # ==========================================
 st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "💰 แบ่งรายได้ (QC)", "⚙️ ตั้งค่าระบบ"])
+menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "💰 แบ่งรายได้ (QC)", "🏆 อันดับนิยายขายดี", "⚙️ ตั้งค่าระบบ"])
 
 # ------------------------------------------
 # 📊 หน้า 1: Dashboard
@@ -149,8 +151,6 @@ if menu == "📊 Dashboard":
                 insights.append(f"📈 **ขุมทรัพย์หลัก:** **{top_platform}** คือแพลตฟอร์มที่ทำเงินให้เรามากที่สุด อย่าลืมเข้าไปอัปเดตนิยายสม่ำเสมอนะครับ")
         except:
             insights.append("💡 **ข้อมูลรายได้:** กำลังรวบรวมสถิติ เพื่อค้นหาว่านิยายเรื่องไหนคือลูกรักทำเงินของเราครับ!")
-    else:
-        insights.append("💰 **บัญชีรายรับ:** ระบบรอพี่นกแก้วมาบันทึกยอดขายก้อนแรกอยู่นะครับ!")
 
     for msg in insights: st.success(msg)
     st.markdown("---")
@@ -164,7 +164,6 @@ if menu == "📊 Dashboard":
             cat_counts.columns = ['หมวดหมู่', 'จำนวน']
             fig_cat = px.pie(cat_counts, values='จำนวน', names='หมวดหมู่', title='สัดส่วนนิยายแยกตามหมวดหมู่', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_cat, use_container_width=True)
-        else: st.info("ยังไม่มีข้อมูลนิยายสำหรับสร้างกราฟ")
 
     with chart_col2:
         if not df_finance.empty and total_revenue > 0:
@@ -172,7 +171,6 @@ if menu == "📊 Dashboard":
             fig_plat = px.bar(plat_rev, x='แพลตฟอร์ม', y='ยอดสุทธิ', title='รายได้สุทธิแยกตามแพลตฟอร์ม', text='ยอดสุทธิ', color='แพลตฟอร์ม', color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_plat.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
             st.plotly_chart(fig_plat, use_container_width=True)
-        else: st.info("ยังไม่มีข้อมูลรายรับสำหรับสร้างกราฟ")
 
 # ------------------------------------------
 # 📚 หน้า 2: คลังนิยาย
@@ -237,10 +235,7 @@ elif menu == "📚 คลังนิยาย":
                 st.session_state[f"show_edit_{idx}"] = not st.session_state.get(f"show_edit_{idx}", False)
 
             st.write(f"**หมวดหมู่:** {b['หมวดหมู่']} | **QC:** {b.get('QC','-')} | **สถานะ:** {b.get('สถานะ', 'กำลังอัปเดต')}")
-            
-            if b.get('เรื่องย่อ'):
-                st.markdown(f"<div class='synopsis-box'><b>เรื่องย่อ:</b><br>{b['เรื่องย่อ']}</div>", unsafe_allow_html=True)
-
+            if b.get('เรื่องย่อ'): st.markdown(f"<div class='synopsis-box'><b>เรื่องย่อ:</b><br>{b['เรื่องย่อ']}</div>", unsafe_allow_html=True)
             st.progress(min(int(b.get('ตอนปัจจุบัน',0)/max(b.get('เป้าหมาย',1),1)*100), 100))
             st.caption(f"ตอนที่: {b.get('ตอนปัจจุบัน',0)} / {b.get('เป้าหมาย',150)}")
 
@@ -252,7 +247,6 @@ elif menu == "📚 คลังนิยาย":
                 st.markdown(f"**ต้นฉบับ:** {orig_html}", unsafe_allow_html=True)
             if b.get('หมายเหตุ'): st.info(f"**📝 หมายเหตุ:** {b['หมายเหตุ']}")
 
-        # แสดงยอดขายเฉพาะเรื่อง
         if st.session_state.get(f"show_rev_{idx}", False):
             st.markdown("#### 💵 สรุปยอดขายเรื่องนี้")
             df_f = st.session_state.finance_db
@@ -265,7 +259,6 @@ elif menu == "📚 คลังนิยาย":
             else:
                 st.warning("ยังไม่มีการบันทึกรายได้ของเรื่องนี้ครับ")
 
-        # แก้ไขข้อมูลนิยาย
         if st.session_state.get(f"show_edit_{idx}", False):
             st.markdown("---")
             e1, e2 = st.columns(2)
@@ -308,7 +301,7 @@ elif menu == "📚 คลังนิยาย":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
-# 💰 หน้า 3: บัญชีรายรับ (ลบตารางได้)
+# 💰 หน้า 3: บัญชีรายรับ
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บัญชีรายรับ")
@@ -328,10 +321,7 @@ elif menu == "💰 บัญชีรายรับ":
                 save_all_to_sheets(); st.rerun()
                 
     st.write("#### ✏️ ตารางแก้ไข/ลบข้อมูลรายรับ")
-    st.caption("💡 วิธีลบ: ติ๊กถูกที่กล่องสี่เหลี่ยมหน้าแถวที่ต้องการลบ กดไอคอนถังขยะขวาบน แล้วกดปุ่ม 'บันทึกตารางบัญชีล่าสุด' ด้านล่างครับ")
-    
     edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
-    
     if st.button("💾 บันทึกตารางบัญชีล่าสุด"): 
         st.session_state.finance_db = edited_finance 
         save_all_to_sheets()
@@ -362,54 +352,122 @@ elif menu == "💰 แบ่งรายได้ (QC)":
         df_month = df_merge[df_merge['เดือน-ปี'] == sel_month]
         
         st.markdown("---")
-        
         rev_tong = df_month[df_month['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
         rev_tao = df_month[df_month['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
         total_m = df_month['ยอดสุทธิ'].sum()
 
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(f"<div class='metric-card'><h3 style='color:#6C63FF;'>💖 ตอง (Tong)</h3><h2>฿{rev_tong:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"<div class='metric-card'><h3 style='color:#FF6584;'>💙 ตาว (Tao)</h3><h2>฿{rev_tao:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"<div class='metric-card'><h3>🌍 ยอดรวมสุทธิ</h3><h2>฿{total_m:,.2f}</h2><p>รายได้รวมของแอดมิน</p></div>", unsafe_allow_html=True)
-
-        st.markdown("### 📈 วิเคราะห์ผลงาน")
-        g1, g2 = st.columns(2)
-        
-        with g1:
-            qc_compare = df_month.groupby('QC')['ยอดสุทธิ'].sum().reset_index()
-            if not qc_compare.empty and qc_compare['ยอดสุทธิ'].sum() > 0:
-                fig_pie = px.pie(qc_compare, values='ยอดสุทธิ', names='QC', title=f'สัดส่วนงานของทีม QC ({sel_month})',
-                                 color='QC', color_discrete_map={'ตอง':'#6C63FF', 'ตาว':'#FF6584'}, hole=0.5)
-                st.plotly_chart(fig_pie, use_container_width=True)
-            else:
-                st.info("ยังไม่มีข้อมูลเพียงพอสำหรับสร้างกราฟสัดส่วน")
-            
-        with g2:
-            top_books = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=True).tail(5).reset_index()
-            if not top_books.empty and top_books['ยอดสุทธิ'].sum() > 0:
-                fig_bar = px.bar(top_books, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', title=f'🏆 5 อันดับเรื่องทำเงินสูงสุด ({sel_month})',
-                                 text_auto=',.2f', color='ยอดสุทธิ', color_continuous_scale='Purples')
-                st.plotly_chart(fig_bar, use_container_width=True)
-            else:
-                st.info("ยังไม่มีข้อมูลนิยายทำเงินในเดือนนี้")
+        with col1: st.markdown(f"<div class='metric-card'><h3 style='color:#6C63FF;'>💖 ตอง (Tong)</h3><h2>฿{rev_tong:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
+        with col2: st.markdown(f"<div class='metric-card'><h3 style='color:#FF6584;'>💙 ตาว (Tao)</h3><h2>฿{rev_tao:,.2f}</h2><p>ส่วนแบ่งเดือน {sel_month}</p></div>", unsafe_allow_html=True)
+        with col3: st.markdown(f"<div class='metric-card'><h3>🌍 ยอดรวมสุทธิ</h3><h2>฿{total_m:,.2f}</h2><p>รายได้รวมเดือน {sel_month}</p></div>", unsafe_allow_html=True)
 
         st.markdown("---")
-        st.subheader("📑 รายละเอียดรายได้แยกตามเรื่อง")
-        
         who = st.multiselect("กรองดูเฉพาะรายชื่อ:", options=['ตอง', 'ตาว'], default=['ตอง', 'ตาว'])
         df_final = df_month[df_month['QC'].isin(who)]
-        
         st.dataframe(df_final[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
-        
-        no_qc = df_month[df_month['QC'].isna()]['ชื่อเรื่อง'].unique()
-        if len(no_qc) > 0:
-            st.error(f"⚠️ **ตรวจพบรายได้ที่ไม่มีคนดูแล:** {', '.join(no_qc)} (โปรดไปที่ 'คลังนิยาย' แล้วกดแก้ไขเพื่อใส่ชื่อ QC ให้เรื่องนี้ด้วยครับ)")
 
 # ------------------------------------------
-# ⚙️ หน้า 5: ตั้งค่าระบบ
+# 🏆 หน้า 5: อันดับนิยายขายดี (จัดเต็ม Top 10 + AI + รูปปก)
+# ------------------------------------------
+elif menu == "🏆 อันดับนิยายขายดี":
+    st.title("🏆 อันดับนิยายขายดี & AI วิเคราะห์ผลงาน")
+
+    if st.session_state.finance_db.empty or not st.session_state.books_data:
+        st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้เพียงพอสำหรับการจัดอันดับครับ")
+    else:
+        # เตรียมข้อมูล (รวมข้อมูลเงิน + รูปปก + QC)
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'ภาพปก']]
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
+
+        # --- ส่วนที่ 1: AI วิเคราะห์และให้คำแนะนำ ---
+        st.subheader("🤖 AI สรุปแนวโน้มและให้คำแนะนำ")
+        
+        # เลือกรอบเดือนล่าสุดที่มีข้อมูล
+        all_months = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
+        current_m = all_months[0] if all_months else None
+        
+        if current_m:
+            df_curr = df_merge[df_merge['เดือน-ปี'] == current_m]
+            sum_tong = df_curr[df_curr['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
+            sum_tao = df_curr[df_curr['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
+            
+            ai_msg = f"📊 **ภาพรวมเดือน {current_m}:** "
+            if sum_tong > sum_tao:
+                ai_msg += f"เดือนนี้ **ตอง** ทำผลงานได้โดดเด่นนำหน้าตาวอยู่ครับ (ยอดของตอง ฿{sum_tong:,.2f}) แนะนำให้ **ตาว** ลองอัปเดตตอนของนิยายที่กำลังติดพัน หรือจัดโปรโมชันกระตุ้นยอดเพิ่มเติมนะครับ!"
+            elif sum_tao > sum_tong:
+                ai_msg += f"เดือนนี้ **ตาว** ฟอร์มร้อนแรงมากครับ! (ยอดของตาว ฿{sum_tao:,.2f}) แนะนำให้ **ตอง** ดันนิยายเรื่องใหม่ๆ หรือเรื่องที่ใกล้จบขึ้นมาโปรโมทเพื่อดึงยอดตีตื้นขึ้นมาครับ!"
+            else:
+                ai_msg += f"เดือนนี้ยอดของ **ตอง** และ **ตาว** สูสีกันมากครับ เป็นสัญญาณที่ดีมากที่ทีม QC ทุ่มเทกันทั้งคู่ สู้ต่อไปครับ!"
+            
+            st.info(ai_msg)
+
+        # กราฟแนวโน้ม (Trend Line)
+        trend_df = df_merge.groupby(['เดือน-ปี', 'QC'])['ยอดสุทธิ'].sum().reset_index()
+        if not trend_df.empty:
+            fig_trend = px.line(trend_df, x='เดือน-ปี', y='ยอดสุทธิ', color='QC', markers=True, 
+                                title='📈 กราฟเปรียบเทียบแนวโน้มรายได้ (ตอง vs ตาว)',
+                                color_discrete_map={'ตอง':'#6C63FF', 'ตาว':'#FF6584'})
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+        st.markdown("---")
+
+        # ฟังก์ชันช่วยวาดกล่อง Top 10 พร้อมรูปปก
+        def draw_top_10(df_source, title):
+            st.markdown(f"#### {title}")
+            top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
+            top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
+            
+            if top_10.empty:
+                st.write("ยังไม่มีข้อมูล")
+                return
+                
+            # วาดแถวละ 5 เรื่อง
+            for i in range(0, len(top_10), 5):
+                cols = st.columns(5)
+                for j, col in enumerate(cols):
+                    if i + j < len(top_10):
+                        row = top_10.iloc[i+j]
+                        with col:
+                            if row['ภาพปก']: st.image(row['ภาพปก'], use_container_width=True)
+                            else: st.info("ไม่มีปก")
+                            st.markdown(f"**#{i+j+1}** {row['ชื่อเรื่อง']}")
+                            st.caption(f"ยอด: ฿{row['ยอดสุทธิ']:,.2f}")
+
+        # --- ส่วนที่ 2: Top 10 ภาพรวม ---
+        st.subheader("🌍 Top 10 ขายดีภาพรวม (ทั้งหมด)")
+        tab_all_m, tab_all_t = st.tabs(["📅 ประจำเดือนล่าสุด", "🌟 ตลอดกาล (All-Time)"])
+        with tab_all_m:
+            if current_m: draw_top_10(df_merge[df_merge['เดือน-ปี'] == current_m], f"10 อันดับภาพรวม ประจำเดือน {current_m}")
+        with tab_all_t:
+            draw_top_10(df_merge, "10 อันดับภาพรวม ตลอดกาล")
+
+        st.markdown("---")
+
+        # --- ส่วนที่ 3: Top 10 แยกตาม QC (ตอง / ตาว) ---
+        st.subheader("👥 Top 10 แยกตามผู้ดูแล (QC)")
+        tab_qc_tong, tab_qc_tao = st.tabs(["💖 ผลงานของ ตอง", "💙 ผลงานของ ตาว"])
+        
+        with tab_qc_tong:
+            df_tong = df_merge[df_merge['QC'] == 'ตอง']
+            c_tong1, c_tong2 = st.columns(2)
+            with c_tong1: 
+                if current_m: draw_top_10(df_tong[df_tong['เดือน-ปี'] == current_m], "ประจำเดือนล่าสุด")
+            with c_tong2: draw_top_10(df_tong, "ตลอดกาล (All-Time)")
+
+        with tab_qc_tao:
+            df_tao = df_merge[df_merge['QC'] == 'ตาว']
+            c_tao1, c_tao2 = st.columns(2)
+            with c_tao1: 
+                if current_m: draw_top_10(df_tao[df_tao['เดือน-ปี'] == current_m], "ประจำเดือนล่าสุด")
+            with c_tao2: draw_top_10(df_tao, "ตลอดกาล (All-Time)")
+
+
+# ------------------------------------------
+# ⚙️ หน้า 6: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
