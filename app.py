@@ -17,7 +17,11 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
     
-    .stApp { font-family: 'Prompt', sans-serif !important; background-color: #f7f9fc; }
+    html, body, [class*="css"], .stMarkdown, p, h1, h2, h3, h4, h5, h6, label, input, button { 
+        font-family: 'Prompt', sans-serif !important; 
+    }
+    
+    .stApp { background-color: #f7f9fc; }
     
     [data-testid="stSidebar"] {
         background-color: #ffffff;
@@ -55,13 +59,20 @@ st.markdown("""
     .metric-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
     .metric-card h2 { color: #2C3E50; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
     .metric-card h3 { color: #7F8C8D; font-size: 1rem; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+
+    .link-badge { 
+        display: inline-block; background: #6C63FF; color: white !important; 
+        padding: 6px 16px; border-radius: 20px; text-decoration: none; font-size: 13px; font-weight: 500;
+        margin-right: 10px; margin-bottom: 10px; transition: 0.3s; box-shadow: 0 3px 8px rgba(108,99,255,0.2);
+    }
+    .link-badge:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(108, 99, 255, 0.4); }
     
     .split-box-blue { background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); border: 1px solid #bae6fd; border-radius: 24px; padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); margin-bottom: 20px; height: 100%; }
     .split-box-pink { background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); border: 1px solid #fbcfe8; border-radius: 24px; padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); margin-bottom: 20px; height: 100%; }
     
-    .rank-card { background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #f0f0f0; margin-bottom: 15px; }
-    .rank-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(108,99,255,0.15); border-color: #6C63FF; }
-    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
+    .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #f0f0f0; margin-bottom: 20px; }
+    .rank-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(108,99,255,0.15); border-color: #6C63FF; }
+    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
     
     .ai-main { background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%); border-left: 6px solid #6C63FF; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(108,99,255,0.1); margin-bottom: 15px; }
     .ai-tong { background: linear-gradient(135deg, #fff0f3 0%, #ffffff 100%); border-left: 6px solid #FF6584; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(255,101,132,0.1); margin-bottom: 15px; }
@@ -179,11 +190,11 @@ if menu == "📊 Dashboard":
         top_book = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
         near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
         
-        # ทุบโค้ดแบนราบ
         main_insight = f"<div class='ai-main'><h4 style='color:#6C63FF; margin-bottom:10px;'>🌟 ภาพรวมและทิศทางอนาคต (Overall Trends)</h4><p><b>นิยายชูโรงของเรา:</b> ตอนนี้เรื่อง <b>\"{top_book}\"</b> ยืนหนึ่งเรื่องการสร้างรายได้ครับ ในขณะที่หมวดหมู่ที่นักอ่านเปย์หนักที่สุดตกเป็นของ <b>\"{top_cat}\"</b></p><p><b>💡 AI ขอแนะนำ:</b> ในการซื้อลิขสิทธิ์เรื่องต่อไป แนะนำให้เล็งหมวด <b>\"{top_cat}\"</b> เพิ่มเติมครับ เพราะฐานคนอ่านของเราชอบแนวนี้เป็นพิเศษ</p>"
         if near_finish: main_insight += f"<p><b>🚀 โอกาสทอง:</b> มีนิยายที่แปลไปแล้วเกิน 80% คือ <b>{', '.join(near_finish)}</b> เตรียมจัดแพ็กเกจ E-Book หรือติดเหรียญโปรโมทตอนจบได้เลยครับ คาดว่ายอดจะพุ่งกระฉูดแน่นอน!</p>"
         main_insight += "</div>"
-        st.markdown(main_insight, unsafe_allow_html=True)
+        
+        st.markdown(main_insight.replace('\n', ''), unsafe_allow_html=True)
         
         col_qc1, col_qc2 = st.columns(2)
         with col_qc1:
@@ -191,7 +202,8 @@ if menu == "📊 Dashboard":
             if not df_tong.empty and df_tong['ยอดสุทธิ'].sum() > 0:
                 tong_top = df_tong.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
                 tong_rev = df_tong['ยอดสุทธิ'].sum()
-                st.markdown(f"<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ผลงานของ ตอง (Tong)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tong_top}\"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p><p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>\"{tong_top}\"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p></div>", unsafe_allow_html=True)
+                html_tong = f"<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ผลงานของ ตอง (Tong)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tong_top}\"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p><p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>\"{tong_top}\"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p></div>"
+                st.markdown(html_tong.replace('\n', ''), unsafe_allow_html=True)
             else:
                 st.markdown("<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ตอง (Tong)</h4><p>กำลังรอสร้างผลงานยอดขายแรกอยู่ครับ สู้ๆ!</p></div>", unsafe_allow_html=True)
                 
@@ -200,7 +212,8 @@ if menu == "📊 Dashboard":
             if not df_tao.empty and df_tao['ยอดสุทธิ'].sum() > 0:
                 tao_top = df_tao.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
                 tao_rev = df_tao['ยอดสุทธิ'].sum()
-                st.markdown(f"<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ผลงานของ ตาว (Tao)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tao_top}\"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p><p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>\"{tao_top}\"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p></div>", unsafe_allow_html=True)
+                html_tao = f"<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ผลงานของ ตาว (Tao)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tao_top}\"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p><p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>\"{tao_top}\"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p></div>"
+                st.markdown(html_tao.replace('\n', ''), unsafe_allow_html=True)
             else:
                 st.markdown("<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ตาว (Tao)</h4><p>รอเปิดตัวยอดขายสุดปังอยู่ครับ เป็นกำลังใจให้!</p></div>", unsafe_allow_html=True)
 
@@ -242,8 +255,8 @@ elif menu == "📚 คลังนิยาย":
         
         c_img, c_form = st.columns([1, 3])
         with c_img: 
-            img_cover = b.get('ภาพปก') if b.get('ภาพปก') else "https://via.placeholder.com/300x450?text=No+Cover"
-            st.markdown(f"<img src='{img_cover}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:16px; box-shadow:0 6px 15px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
+            img_cover = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
+            st.markdown(f"<img src='{img_cover}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:16px; box-shadow:0 6px 15px rgba(0,0,0,0.1);' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\">", unsafe_allow_html=True)
             
         with c_form:
             e_title = st.text_input("ชื่อเรื่อง", value=b['ชื่อเรื่อง'])
@@ -329,25 +342,23 @@ elif menu == "📚 คลังนิยาย":
             b['_orig_idx'] = idx 
             filtered_books.append(b)
 
-        # 🌟 วาดแกลลอรี่นิยาย 6 คอลัมน์
+        # 🌟 วาดแกลลอรี่นิยาย 6 คอลัมน์ (ทุบโค้ดแบนราบแก้บั๊กกล่องขาวทะลุ)
         for i in range(0, len(filtered_books), 6):
             cols = st.columns(6)
             for j, col in enumerate(cols):
                 if i + j < len(filtered_books):
                     b = filtered_books[i+j]
                     with col:
-                        st.markdown("<div class='rank-card'>", unsafe_allow_html=True)
-                        safe_image(b.get('ภาพปก'))
-                        # ล็อกความสูงกล่องชื่อเรื่องกันเบี้ยว
-                        st.markdown(f"<div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
-                        
+                        img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
                         stat_color = "#28a745" if b.get('สถานะ') == 'จบแล้ว' else ("#ffc107" if b.get('สถานะ') == 'พักการแปล' else "#17a2b8")
-                        st.markdown(f"<span style='color:{stat_color}; font-size:12px; font-weight:600;'>● {b.get('สถานะ')}</span><br><br>", unsafe_allow_html=True)
+                        
+                        card_html = f"<div style='background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f0f0f0; margin-bottom: 10px;'><img src='{img_url}' style='width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px;' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"><div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div><div style='color:{stat_color}; font-size:12px; font-weight:600;'>● {b.get('สถานะ')}</div></div>"
+                        
+                        st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
                         
                         if st.button("✏️ จัดการ", key=f"edit_{b['_orig_idx']}", use_container_width=True):
                             st.session_state.selected_book_idx = b['_orig_idx']
                             st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # ⚡ หน้า 3: แก้ไขด่วน (Quick Edit)
@@ -397,10 +408,10 @@ elif menu == "📢 แนะนำนิยาย":
         else:
             synopsis_text = synopsis_val.replace('\n', '<br>')
 
-        # 🛠️ ทุบโค้ดแบนราบ ป้องกัน Streamlit แทรกแซง HTML 100%
+        # 🛠️ ทุบโค้ดแบนราบ ป้องกัน Streamlit แทรกแซง HTML + อัปเดตปุ่มตามที่สั่ง
         promo_html = f"<div style='background: linear-gradient(135deg, #ffffff 0%, #f4f6f9 100%); padding: 50px; border-radius: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.06); border: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; max-width: 1000px; margin: 0 auto;'><div style='flex: 0 0 320px;'><img src='{img_url}' style='width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.15);' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"></div><div style='flex: 1; min-width: 300px;'><div style='color: #6C63FF; font-weight: 700; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;'>Nok-kaew Translation</div><h1 style='color: #1e293b; font-size: 2.4rem; font-weight: 700; margin-top: 0; margin-bottom: 20px; line-height: 1.3;'>{b['ชื่อเรื่อง']}</h1><div style='margin-bottom: 30px; display: flex; gap: 15px; flex-wrap: wrap;'><div style='background: #e0f2fe; color: #0284c7; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📌 สถานะ: {b['สถานะ']}</div><div style='background: #f3e8ff; color: #7e22ce; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📑 {b['ตอนปัจจุบัน']} / {b['เป้าหมาย']} ตอน</div><div style='background: #ffedd5; color: #be185d; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; display: flex; align-items: center;'>📂 {b['หมวดหมู่']}</div></div><div style='background: white; padding: 25px; border-radius: 20px; border-left: 6px solid #6C63FF; box-shadow: 0 4px 15px rgba(0,0,0,0.02);'><h3 style='color: #475569; margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; font-weight: 600;'>📝 เรื่องย่อ</h3><p style='color: #334155; font-size: 1.05rem; line-height: 1.8; margin-bottom: 0;'>{synopsis_text}</p></div><div style='margin-top: 35px; background: #faf5ff; padding: 20px; border-radius: 20px; text-align: center; border: 1px dashed #e9d5ff;'><h4 style='color: #9333ea; margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; font-weight: 600;'>✨ ติดตามอ่านได้ที่ Facebook: นกแก้วอู้งาน</h4><div style='display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;'><a href='https://readtoon.com/profile/nok1122' target='_blank' style='background: linear-gradient(135deg, #A855F7 0%, #8B5CF6 100%); color: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 10px rgba(168,85,247,0.3); display: inline-block;'>📚 ReadToon</a><a href='https://kairew.com/writer-profile/Nok1122' target='_blank' style='background: linear-gradient(135deg, #F97316 0%, #EA580C 100%); color: white; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 4px 10px rgba(249,115,22,0.3); display: inline-block;'>🐉 KAIREW</a></div></div></div></div>"
         
-        st.markdown(promo_html, unsafe_allow_html=True)
+        st.markdown(promo_html.replace('\n', ''), unsafe_allow_html=True)
         st.info("📸 **Tip:** เลื่อนจัดหน้าจอให้สวยงาม แล้วแคปเจอร์เพื่อนำไปโพสต์ได้เลยครับ!")
 
     else:
@@ -408,20 +419,22 @@ elif menu == "📢 แนะนำนิยาย":
         st.write("เลือกนิยายที่ต้องการ เพื่อสร้างภาพพร้อมเรื่องย่อสำหรับแคปหน้าจอไปโปรโมท")
         st.markdown("---")
         
-        # 🌟 วาดแกลลอรี่โปรโมท 6 คอลัมน์
+        # 🌟 วาดแกลลอรี่โปรโมท 6 คอลัมน์ (ทุบโค้ดแบนราบแก้บั๊กกล่องขาว)
         for i in range(0, len(st.session_state.books_data), 6):
             cols = st.columns(6)
             for j, col in enumerate(cols):
                 if i + j < len(st.session_state.books_data):
                     b = st.session_state.books_data[i+j]
                     with col:
-                        st.markdown("<div class='rank-card'>", unsafe_allow_html=True)
-                        safe_image(b.get('ภาพปก'))
-                        st.markdown(f"<div style='font-size:13px; font-weight:600; line-height:1.2; margin-bottom:10px; height:32px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
+                        img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
+                        
+                        card_html = f"<div style='background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f0f0f0; margin-bottom: 10px;'><img src='{img_url}' style='width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px;' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"><div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
+                        
+                        st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
+                        
                         if st.button("👁️ สร้างภาพ", key=f"promo_{i+j}", use_container_width=True):
                             st.session_state.selected_promo_idx = i+j
                             st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # 💰 หน้า 5: บัญชีรายรับ
@@ -512,7 +525,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 st.markdown(html_content, unsafe_allow_html=True)
                 return
 
-            # ทุบโค้ดแบนราบให้ Leaderboard
+            # ทุบโค้ดแบนราบให้ Leaderboard ด้วย
             html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;'>"
             for i, row in enumerate(top_10.itertuples()):
                 img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() != "" else "https://via.placeholder.com/200x300?text=No+Cover"
@@ -520,7 +533,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 html_content += card_html
             
             html_content += "</div></div>"
-            st.markdown(html_content, unsafe_allow_html=True)
+            st.markdown(html_content.replace('\n', ''), unsafe_allow_html=True)
 
         all_m = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
         cur_m = all_m[0] if all_m else None
