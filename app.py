@@ -17,6 +17,7 @@ st.markdown("""
     .link-badge:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(108, 99, 255, 0.4); }
     .link-badge-orig { background: #FF6584; }
     .btn-delete>div>button { background: #FF4B4B !important; color: white !important; }
+    .metric-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -26,7 +27,6 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    # โหลดคลังนิยาย
     try:
         df_books = conn.read(worksheet="Books", ttl=0)
         books = df_books.to_dict('records')
@@ -37,21 +37,18 @@ def load_data():
             if isinstance(b.get('ลิงก์ต้นฉบับ'), str):
                 try: b['ลิงก์ต้นฉบับ'] = json.loads(b['ลิงก์ต้นฉบับ'])
                 except: b['ลิงก์ต้นฉบับ'] = []
-            # เติมค่าว่างกัน Error
             if 'สถานะ' not in b: b['สถานะ'] = 'กำลังอัปเดต'
             if 'หมายเหตุ' not in b: b['หมายเหตุ'] = ''
         st.session_state.books_data = books
     except:
         st.session_state.books_data = []
 
-    # โหลดบัญชี
     try:
         st.session_state.finance_db = conn.read(worksheet="Finance", ttl=0)
         if st.session_state.finance_db.empty: raise Exception
     except:
         st.session_state.finance_db = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
 
-    # โหลดการตั้งค่า
     try:
         df_settings = conn.read(worksheet="Settings", ttl=0)
         st.session_state.app_settings = {
@@ -63,7 +60,6 @@ def load_data():
 
 def save_all_to_sheets():
     try:
-        # 1. บันทึก Books
         books_to_save = []
         for b in st.session_state.books_data:
             temp = b.copy()
@@ -75,40 +71,63 @@ def save_all_to_sheets():
         if df_books_save.empty:
             df_books_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
         conn.update(worksheet="Books", data=df_books_save)
-        
-        # 2. บันทึก Finance
         conn.update(worksheet="Finance", data=st.session_state.finance_db)
         
-        # 3. บันทึก Settings
         settings_df = pd.DataFrame({
             "categories": pd.Series(st.session_state.app_settings['categories']),
             "platforms": pd.Series(st.session_state.app_settings['platforms'])
         })
         conn.update(worksheet="Settings", data=settings_df)
-        
         st.toast("✅ ซิงค์ข้อมูลกับ Google Sheets สำเร็จ!")
     except Exception as e:
-        st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e} \n\nโปรดตรวจสอบว่าสร้าง Tab ชื่อ 'Books', 'Finance', 'Settings' ครบถ้วนและแชร์สิทธิ์ Editor แล้ว")
+        st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
 
 if 'books_data' not in st.session_state: load_data()
 
 # ==========================================
-# 📱 3. ระบบนำทางและหน้าจอหลัก
+# 📱 3. ระบบนำทาง (Sidebar)
 # ==========================================
 st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("เมนูหลัก", ["📚 คลังนิยาย", "💰 บัญชีรายรับ", "⚙️ ตั้งค่าระบบ"])
+menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "⚙️ ตั้งค่าระบบ"])
 
 # ------------------------------------------
-# หน้า: คลังนิยาย
+# หน้า 1: Dashboard
 # ------------------------------------------
-if menu == "📚 คลังนิยาย":
+if menu == "📊 Dashboard":
+    st.title("📊 Dashboard ภาพรวม")
+    
+    # คำนวณสถิติ
+    total_books = len(st.session_state.books_data)
+    active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
+    finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
+    
+    total_revenue = 0
+    if not st.session_state.finance_db.empty:
+        total_revenue = pd.to_numeric(st.session_state.finance_db['ยอดสุทธิ'], errors='coerce').sum()
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books} เรื่อง</h2></div>", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"<div class='metric-card'><h3>🔥 กำลังอัปเดต</h3><h2>{active_books} เรื่อง</h2></div>", unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books} เรื่อง</h2></div>", unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"<div class='metric-card'><h3>💰 ยอดรายได้สุทธิ</h3><h2>฿{total_revenue:,.2f}</h2></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.info("💡 เลือกเมนูที่แถบด้านซ้ายเพื่อจัดการคลังนิยายหรือบันทึกรายรับได้เลยครับ")
+
+# ------------------------------------------
+# หน้า 2: คลังนิยาย
+# ------------------------------------------
+elif menu == "📚 คลังนิยาย":
     st.title("📚 จัดการคลังนิยาย")
     
     col_ref, _ = st.columns([1, 4])
     if col_ref.button("🔄 ดึงข้อมูลล่าสุด"): load_data(); st.rerun()
 
-    # --- ฟอร์มเพิ่มนิยาย ---
     with st.expander("✨ เพิ่มนิยายเรื่องใหม่"):
         with st.form("add_book_form"):
             c1, c2 = st.columns(2)
@@ -124,8 +143,6 @@ if menu == "📚 คลังนิยาย":
                     save_all_to_sheets(); st.rerun()
 
     st.markdown("---")
-    
-    # --- ระบบค้นหาและฟิลเตอร์ ---
     st.subheader("🔍 ค้นหาและคัดกรอง")
     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
     search_q = f_col1.text_input("ค้นหาชื่อเรื่อง...")
@@ -133,7 +150,6 @@ if menu == "📚 คลังนิยาย":
     filter_qc = f_col3.selectbox("ผู้ดูแล (QC)", ["ทั้งหมด", "ตอง", "ตาว"])
     filter_stat = f_col4.selectbox("สถานะ", ["ทั้งหมด", "กำลังอัปเดต", "จบแล้ว", "พักการแปล"])
 
-    # กรองข้อมูล
     filtered_books = []
     for idx, b in enumerate(st.session_state.books_data):
         if search_q and search_q.lower() not in b['ชื่อเรื่อง'].lower(): continue
@@ -143,7 +159,6 @@ if menu == "📚 คลังนิยาย":
         b['_orig_idx'] = idx 
         filtered_books.append(b)
 
-    # --- แสดงการ์ดนิยาย ---
     for b in filtered_books:
         idx = b['_orig_idx']
         st.markdown("<div class='book-card'>", unsafe_allow_html=True)
@@ -163,7 +178,6 @@ if menu == "📚 คลังนิยาย":
             st.progress(min(int(b.get('ตอนปัจจุบัน',0)/max(b.get('เป้าหมาย',1),1)*100), 100))
             st.caption(f"ตอนที่: {b.get('ตอนปัจจุบัน',0)} / {b.get('เป้าหมาย',150)}")
 
-            # แสดงปุ่มลิงก์
             if b.get('ลิงก์อ่าน'):
                 links_html = "".join([f"<a href='{l.get('url','')}' target='_blank' class='link-badge'>🔗 {l.get('note','ลิงก์อ่าน')}</a>" for l in b['ลิงก์อ่าน'] if l.get('url')])
                 st.markdown(f"**📖 อ่านนิยาย:** {links_html}", unsafe_allow_html=True)
@@ -173,7 +187,6 @@ if menu == "📚 คลังนิยาย":
             if b.get('หมายเหตุ'):
                 st.info(f"**📝 หมายเหตุ:** {b['หมายเหตุ']}")
 
-        # --- หน้าต่างแก้ไขข้อมูล (ซ่อน/แสดง) ---
         if st.session_state.get(f"show_edit_{idx}", False):
             st.markdown("---")
             st.write("#### 🛠️ แก้ไขรายละเอียด")
@@ -184,15 +197,15 @@ if menu == "📚 คลังนิยาย":
             e_curr = e2.number_input("ตอนปัจจุบัน", value=int(b.get('ตอนปัจจุบัน',0)), key=f"curr_{idx}")
             e_note = st.text_area("📝 หมายเหตุ (Note)", value=b.get('หมายเหตุ',''), key=f"n_{idx}")
             
-            st.write("#### 🔗 จัดการลิงก์ (กดช่องว่างบรรทัดล่างสุดเพื่อเพิ่มลิงก์ใหม่)")
+            st.write("#### 🔗 จัดการลิงก์ (พิมพ์ URL และชื่อลงในตารางได้เลย)")
             l1, l2 = st.columns(2)
             with l1:
-                st.write("**📖 ลิงก์อ่าน (URL & ชื่อปุ่ม)**")
+                st.write("**📖 ลิงก์อ่าน**")
                 df_read = pd.DataFrame(b.get('ลิงก์อ่าน', [{"url":"", "note":""}]))
                 if df_read.empty: df_read = pd.DataFrame([{"url":"", "note":""}])
                 edited_read = st.data_editor(df_read, num_rows="dynamic", key=f"dr_{idx}", use_container_width=True)
             with l2:
-                st.write("**🇰🇷 ลิงก์ต้นฉบับ (URL & ชื่อปุ่ม)**")
+                st.write("**🇰🇷 ลิงก์ต้นฉบับ**")
                 df_orig = pd.DataFrame(b.get('ลิงก์ต้นฉบับ', [{"url":"", "note":""}]))
                 if df_orig.empty: df_orig = pd.DataFrame([{"url":"", "note":""}])
                 edited_orig = st.data_editor(df_orig, num_rows="dynamic", key=f"do_{idx}", use_container_width=True)
@@ -216,29 +229,29 @@ if menu == "📚 คลังนิยาย":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
-# หน้า: บัญชีรายรับ (อย่างย่อ)
+# หน้า 3: บัญชีรายรับ
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บัญชีรายรับ")
-    st.info("ระบบบัญชีพร้อมใช้งานแล้ว กรุณาบันทึกข้อมูลได้เลยครับ")
+    st.info("กรอกข้อมูลรายได้ด้านล่าง ระบบจะคำนวณยอดสุทธิ (หัก 17%) ให้อัตโนมัติ")
     with st.form("add_finance"):
         c1, c2 = st.columns(2)
         d = c1.date_input("วันที่")
-        b = c1.selectbox("ชื่อเรื่อง", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["N/A"])
+        b = c1.selectbox("ชื่อเรื่อง", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["ไม่มีข้อมูล"])
         p = c2.selectbox("แพลตฟอร์ม", st.session_state.app_settings['platforms'])
         amt = c2.number_input("ยอดรายได้ดิบ (฿)", min_value=0.0)
         
         if st.form_submit_button("บันทึกรายได้"):
-            if b != "N/A":
+            if b != "ไม่มีข้อมูล":
                 new_f = pd.DataFrame([{'วันที่':d.strftime("%Y-%m-%d"), 'ชื่อเรื่อง':b, 'แพลตฟอร์ม':p, 'ยอดดิบ':amt, 'หักแพลตฟอร์ม (17%)':amt*0.17, 'ยอดสุทธิ':amt*0.83}])
                 st.session_state.finance_db = pd.concat([st.session_state.finance_db, new_f], ignore_index=True)
                 save_all_to_sheets(); st.rerun()
                 
     st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
-    if st.button("💾 บันทึกตารางบัญชี"): save_all_to_sheets()
+    if st.button("💾 บันทึกตารางบัญชีล่าสุด"): save_all_to_sheets()
 
 # ------------------------------------------
-# หน้า: ตั้งค่า
+# หน้า 4: ตั้งค่า
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
@@ -246,14 +259,14 @@ elif menu == "⚙️ ตั้งค่าระบบ":
     with c1:
         st.subheader("เพิ่มหมวดหมู่นิยาย")
         new_cat = st.text_input("ชื่อหมวดหมู่ใหม่")
-        if st.button("เพิ่มหมวดหมู่"):
+        if st.button("บันทึกหมวดหมู่"):
             if new_cat and new_cat not in st.session_state.app_settings['categories']:
                 st.session_state.app_settings['categories'].append(new_cat)
                 save_all_to_sheets(); st.rerun()
     with c2:
-        st.subheader("เพิ่มแพลตฟอร์ม")
+        st.subheader("เพิ่มแพลตฟอร์มรายได้")
         new_plat = st.text_input("ชื่อแพลตฟอร์มใหม่")
-        if st.button("เพิ่มแพลตฟอร์ม"):
+        if st.button("บันทึกแพลตฟอร์ม"):
             if new_plat and new_plat not in st.session_state.app_settings['platforms']:
                 st.session_state.app_settings['platforms'].append(new_plat)
                 save_all_to_sheets(); st.rerun()
