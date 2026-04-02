@@ -81,10 +81,18 @@ st.markdown("""
         color: #4a5568; margin-top: 15px; margin-bottom: 15px; border-left: 4px solid #cbd5e0; line-height: 1.6;
     }
     
-    /* 📦 กล่องแบ่งฝั่งแบบใหม่สำหรับ Leaderboard */
-    .split-box { 
-        background: #ffffff; border: 1px solid #edf2f7; border-radius: 24px; 
-        padding: 25px; box-shadow: 0 6px 20px rgba(0,0,0,0.03); height: 100%; margin-bottom: 20px;
+    /* 📦 กล่องแบ่งฝั่งแบบใหม่แยกสีฟ้า-ชมพู */
+    .split-box-blue { 
+        background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); 
+        border: 1px solid #bae6fd; border-radius: 24px; 
+        padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); 
+        height: 100%; margin-bottom: 20px;
+    }
+    .split-box-pink { 
+        background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); 
+        border: 1px solid #fbcfe8; border-radius: 24px; 
+        padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); 
+        height: 100%; margin-bottom: 20px;
     }
     
     /* 🖼️ เวทมนตร์จัดการรูปให้เท่ากัน (Aspect-Ratio 2:3 แบบปกนิยาย) */
@@ -191,7 +199,7 @@ if menu == "📊 Dashboard":
     insights = []
     if total_books > 0:
         near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
-        if near_finish: insights.append(f"🎯 **นิยายใกล้จบ (เกิน 80%):** {', '.join(near_finish)}")
+        if near_finish: insights.append(f"🎯 **นิยายใกล้จบ (เกิน 80%):** {', '.join(near_finish)} (เตรียมแผนโปรโมทตอนจบได้เลยครับ!)")
         else: insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่กำลังอยู่ในช่วงทยอยอัปเดตครับ")
             
     if not df_finance.empty and total_revenue > 0:
@@ -421,7 +429,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 6: อันดับนิยายขายดี (ดีไซน์แยกกล่องชัดเจน)
+# 🏆 หน้า 6: อันดับนิยายขายดี (แยกสีกล่อง ฟ้า/ชมพู)
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -443,14 +451,13 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        # ฟังก์ชันวาด Top 10 แบบแถวละ 3 เรื่อง (ใหญ่และชัดเจนขึ้น)
         def draw_top_10(df_source, title):
             st.markdown(f"<h3 style='text-align:center; color:#2C3E50; margin-bottom:20px;'>{title}</h3>", unsafe_allow_html=True)
             top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
             top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
             if top_10.empty: st.info("ยังไม่มีข้อมูล"); return
             
-            for i in range(0, len(top_10), 3): # ปรับเป็น 3 คอลัมน์ต่อแถว เพื่อให้รูปใหญ่และไม่เบียด
+            for i in range(0, len(top_10), 3):
                 cols = st.columns(3)
                 for j, col in enumerate(cols):
                     if i + j < len(top_10):
@@ -464,32 +471,30 @@ elif menu == "🏆 อันดับนิยายขายดี":
         all_m = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
         cur_m = all_m[0] if all_m else None
 
-        # 🌍 แสดงผลภาพรวม แยกซ้ายขวาในกล่อง (Split Box)
         st.subheader("🌍 Top 10 ขายดีภาพรวม (ทั้งหมด)")
         col_all1, col_all2 = st.columns(2)
         with col_all1:
-            st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+            st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
             if cur_m: draw_top_10(df_merge[df_merge['เดือน-ปี'] == cur_m], f"📅 ประจำเดือน {cur_m}")
             st.markdown("</div>", unsafe_allow_html=True)
         with col_all2:
-            st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+            st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
             draw_top_10(df_merge, "🌟 ตลอดกาล (All-Time)")
             st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("---")
         
-        # 👥 แสดงผลของทีม แยกแท็บ แล้วค่อยแบ่งซ้ายขวา
         st.subheader("👥 Top 10 แยกตามผู้ดูแล (QC)")
         t3, t4 = st.tabs(["💖 ผลงานของ ตอง", "💙 ผลงานของ ตาว"])
         with t3:
             df_tong = df_merge[df_merge['QC'] == 'ตอง']
             c_tong1, c_tong2 = st.columns(2)
             with c_tong1: 
-                st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+                st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
                 if cur_m: draw_top_10(df_tong[df_tong['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด")
                 st.markdown("</div>", unsafe_allow_html=True)
             with c_tong2: 
-                st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+                st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
                 draw_top_10(df_tong, "🌟 ตลอดกาล")
                 st.markdown("</div>", unsafe_allow_html=True)
                 
@@ -497,11 +502,11 @@ elif menu == "🏆 อันดับนิยายขายดี":
             df_tao = df_merge[df_merge['QC'] == 'ตาว']
             c_tao1, c_tao2 = st.columns(2)
             with c_tao1: 
-                st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+                st.markdown("<div class='split-box-blue'>", unsafe_allow_html=True)
                 if cur_m: draw_top_10(df_tao[df_tao['เดือน-ปี'] == cur_m], "📅 ประจำเดือนล่าสุด")
                 st.markdown("</div>", unsafe_allow_html=True)
             with c_tao2: 
-                st.markdown("<div class='split-box'>", unsafe_allow_html=True)
+                st.markdown("<div class='split-box-pink'>", unsafe_allow_html=True)
                 draw_top_10(df_tao, "🌟 ตลอดกาล")
                 st.markdown("</div>", unsafe_allow_html=True)
 
