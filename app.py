@@ -50,13 +50,8 @@ st.markdown("""
     }
     
     .book-card { 
-        background: white; 
-        border-radius: 24px; 
-        padding: 30px; 
-        margin-bottom: 25px; 
-        box-shadow: 0 8px 20px rgba(0,0,0,0.04); 
-        border-left: 8px solid #6C63FF; 
-        transition: all 0.4s ease;
+        background: white; border-radius: 24px; padding: 30px; margin-bottom: 25px; 
+        box-shadow: 0 8px 20px rgba(0,0,0,0.04); border-left: 8px solid #6C63FF; transition: all 0.4s ease;
     }
     .book-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(108,99,255,0.1); }
     
@@ -81,21 +76,14 @@ st.markdown("""
         color: #4a5568; margin-top: 15px; margin-bottom: 15px; border-left: 4px solid #cbd5e0; line-height: 1.6;
     }
     
-    /* 📦 กล่องแบ่งฝั่งแบบใหม่แยกสีฟ้า-ชมพู */
-    .split-box-blue { 
-        background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); 
-        border: 1px solid #bae6fd; border-radius: 24px; 
-        padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); 
-        margin-bottom: 20px; height: 100%;
-    }
-    .split-box-pink { 
-        background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); 
-        border: 1px solid #fbcfe8; border-radius: 24px; 
-        padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); 
-        margin-bottom: 20px; height: 100%;
-    }
+    .split-box-blue { background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); border: 1px solid #bae6fd; border-radius: 24px; padding: 25px; box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08); margin-bottom: 20px; height: 100%; }
+    .split-box-pink { background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); border: 1px solid #fbcfe8; border-radius: 24px; padding: 25px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.08); margin-bottom: 20px; height: 100%; }
     
-    /* 🖼️ เวทมนตร์จัดการรูปให้เท่ากัน (Aspect-Ratio 2:3 แบบปกนิยาย) */
+    /* 🤖 AI Report Boxes */
+    .ai-main { background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%); border-left: 6px solid #6C63FF; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(108,99,255,0.1); margin-bottom: 15px; }
+    .ai-tong { background: linear-gradient(135deg, #fff0f3 0%, #ffffff 100%); border-left: 6px solid #FF6584; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(255,101,132,0.1); margin-bottom: 15px; }
+    .ai-tao { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-left: 6px solid #38bdf8; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(56,189,248,0.1); margin-bottom: 15px; }
+    
     .cover-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 16px; box-shadow: 0 6px 15px rgba(0,0,0,0.08); }
     .rank-card { transition: 0.3s ease; text-align: center; }
     .rank-card:hover { transform: scale(1.03); }
@@ -177,7 +165,7 @@ st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight:
 menu = st.sidebar.radio("Navigation Menu", ["📊 Dashboard", "📚 คลังนิยาย", "⚡ แก้ไขด่วน (Quick Edit)", "💰 บัญชีรายรับ", "💸 สรุปส่วนแบ่ง (QC)", "🏆 อันดับนิยายขายดี", "⚙️ ตั้งค่าระบบ"])
 
 # ------------------------------------------
-# 📊 หน้า 1: Dashboard
+# 📊 หน้า 1: Dashboard & AI Insights
 # ------------------------------------------
 if menu == "📊 Dashboard":
     st.title("📊 ภาพรวมระบบ (Dashboard)")
@@ -192,26 +180,72 @@ if menu == "📊 Dashboard":
     with col1: st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books}</h2></div>", unsafe_allow_html=True)
     with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books}</h2></div>", unsafe_allow_html=True)
     with col3: st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books}</h2></div>", unsafe_allow_html=True)
-    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิ</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิรวม</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
 
     st.markdown("---")
-    st.subheader("🤖 AI วิเคราะห์ข้อมูล (Smart Insights)")
-    insights = []
-    if total_books > 0:
-        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
-        if near_finish: insights.append(f"🎯 **นิยายใกล้จบ (เกิน 80%):** {', '.join(near_finish)} (เตรียมแผนโปรโมทตอนจบได้เลยครับ!)")
-        else: insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่กำลังอยู่ในช่วงทยอยอัปเดตครับ")
-            
-    if not df_finance.empty and total_revenue > 0:
-        try:
-            top_platform = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().idxmax()
-            top_book = df_finance.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
-            insights.append(f"🏆 **ลูกรักทำเงิน:** นิยายที่ทำรายได้รวมสูงสุดคือเรื่อง **{top_book}**")
-            insights.append(f"📈 **แพลตฟอร์มหลัก:** **{top_platform}** คือขุมทรัพย์หลักของเราครับ")
-        except: pass
-    for msg in insights: st.success(msg)
+    st.title("🤖 AI Executive Report (รายงานเจาะลึก)")
     
+    if not df_finance.empty and st.session_state.books_data:
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'หมวดหมู่', 'ตอนปัจจุบัน', 'เป้าหมาย', 'สถานะ']]
+        df_merge = pd.merge(df_finance, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        
+        # --- 1. สรุปภาพรวมและอนาคต ---
+        top_cat = df_merge.groupby('หมวดหมู่')['ยอดสุทธิ'].sum().idxmax() if 'หมวดหมู่' in df_merge else "ไม่มีข้อมูล"
+        top_book = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
+        
+        main_insight = f"""
+        <div class="ai-main">
+            <h4 style="color:#6C63FF; margin-bottom:10px;">🌟 ภาพรวมและทิศทางอนาคต (Overall Trends)</h4>
+            <p><b>นิยายชูโรงของเรา:</b> ตอนนี้เรื่อง <b>"{top_book}"</b> ยืนหนึ่งเรื่องการสร้างรายได้ครับ ในขณะที่หมวดหมู่ที่นักอ่านเปย์หนักที่สุดตกเป็นของ <b>"{top_cat}"</b></p>
+            <p><b>💡 AI ขอแนะนำ:</b> ในการซื้อลิขสิทธิ์เรื่องต่อไป แนะนำให้เล็งหมวด <b>"{top_cat}"</b> เพิ่มเติมครับ เพราะฐานคนอ่านของเราชอบแนวนี้เป็นพิเศษ</p>
+        """
+        if near_finish:
+            main_insight += f"<p><b>🚀 โอกาสทอง:</b> มีนิยายที่แปลไปแล้วเกิน 80% คือ <b>{', '.join(near_finish)}</b> เตรียมจัดแพ็กเกจ E-Book หรือติดเหรียญโปรโมทตอนจบได้เลยครับ คาดว่ายอดจะพุ่งกระฉูดแน่นอน!</p>"
+        main_insight += "</div>"
+        st.markdown(main_insight, unsafe_allow_html=True)
+        
+        # --- 2. สรุปผลงาน แยก ตอง & ตาว ---
+        col_qc1, col_qc2 = st.columns(2)
+        
+        with col_qc1:
+            df_tong = df_merge[df_merge['QC'] == 'ตอง']
+            if not df_tong.empty and df_tong['ยอดสุทธิ'].sum() > 0:
+                tong_top = df_tong.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                tong_rev = df_tong['ยอดสุทธิ'].sum()
+                st.markdown(f"""
+                <div class="ai-tong">
+                    <h4 style="color:#FF6584; margin-bottom:10px;">💖 ผลงานของ ตอง (Tong)</h4>
+                    <p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p>
+                    <p><b>ลูกรักทำเงิน:</b> เรื่อง <b>"{tong_top}"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p>
+                    <p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>"{tong_top}"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ai-tong"><h4>💖 ตอง (Tong)</h4><p>กำลังรอสร้างผลงานยอดขายแรกอยู่ครับ สู้ๆ!</p></div>', unsafe_allow_html=True)
+                
+        with col_qc2:
+            df_tao = df_merge[df_merge['QC'] == 'ตาว']
+            if not df_tao.empty and df_tao['ยอดสุทธิ'].sum() > 0:
+                tao_top = df_tao.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                tao_rev = df_tao['ยอดสุทธิ'].sum()
+                st.markdown(f"""
+                <div class="ai-tao">
+                    <h4 style="color:#38bdf8; margin-bottom:10px;">💙 ผลงานของ ตาว (Tao)</h4>
+                    <p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p>
+                    <p><b>ลูกรักทำเงิน:</b> เรื่อง <b>"{tao_top}"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p>
+                    <p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>"{tao_top}"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ai-tao"><h4>💙 ตาว (Tao)</h4><p>รอเปิดตัวยอดขายสุดปังอยู่ครับ เป็นกำลังใจให้!</p></div>', unsafe_allow_html=True)
+
+    else:
+        st.info("⚠️ ระบบ AI กำลังรอข้อมูลนิยายและยอดขายเพื่อทำการวิเคราะห์ให้พี่นกแก้วอยู่นะครับ")
+
     st.markdown("---")
+    st.subheader("📈 กราฟสรุปภาพรวม")
     c_c1, c_c2 = st.columns(2)
     with c_c1:
         if total_books > 0:
@@ -451,7 +485,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
 
         st.markdown("---")
 
-        # 🛠️ ฟังก์ชันวาด Top 10 แบบทุบโค้ดให้แบน ป้องกัน Streamlit แทรกแซง
         def draw_top_10_html(df_source, title, box_class):
             top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
             top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
@@ -466,7 +499,6 @@ elif menu == "🏆 อันดับนิยายขายดี":
             html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;'>"
             for i, row in enumerate(top_10.itertuples()):
                 img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() else "https://via.placeholder.com/200x300?text=No+Cover"
-                # ทุบเป็นบรรทัดเดียว ป้องกันโค้ดแตก
                 card_html = f"<div class='rank-card'><img src='{img_url}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); margin-bottom:8px;' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/200x300?text=Error';\"><div style='font-size:13px; line-height:1.2; margin-bottom:4px; font-weight:600; color:#333;'><b>#{i+1}</b> {row.ชื่อเรื่อง}</div><div style='color:#6C63FF; font-weight:bold; font-size:15px;'>฿{row.ยอดสุทธิ:,.0f}</div></div>"
                 html_content += card_html
             
