@@ -3,6 +3,8 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import json
 import plotly.express as px
+from datetime import datetime  # <--- เติมตัวแก้บั๊กให้ตรงนี้แล้วครับ!
+
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Premium UI)
 # ==========================================
@@ -27,14 +29,11 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_update(sheet_name, df):
-    """ ฟังก์ชันพิเศษสำหรับข้ามบั๊กแจ้งเตือน <Response [200]> """
     try:
         conn.update(worksheet=sheet_name, data=df)
     except Exception as e:
-        if "200" in str(e):
-            pass # บันทึกสำเร็จแล้ว แต่ไลบรารีฟ้อง Error ปลอม ให้ปล่อยผ่านไปเลย
-        else:
-            st.error(f"Error {sheet_name}: {e}")
+        if "200" in str(e): pass
+        else: st.error(f"Error {sheet_name}: {e}")
 
 def load_data():
     try:
@@ -82,7 +81,6 @@ def save_all_to_sheets():
         if df_books_save.empty:
             df_books_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
         
-        # ใช้ safe_update ทะลวงบั๊กให้เซฟได้ครบทุกชีต
         safe_update("Books", df_books_save)
         safe_update("Finance", st.session_state.finance_db)
         
@@ -92,7 +90,7 @@ def save_all_to_sheets():
         })
         safe_update("Settings", settings_df)
         
-        st.toast("✅ ข้อมูลส่งเข้า Google Sheets สำเร็จ!")
+        st.toast("✅ บันทึกข้อมูลลง Google Sheets สำเร็จ!")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
 
@@ -104,13 +102,10 @@ if 'books_data' not in st.session_state: load_data()
 st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "💰 แบ่งรายได้ (QC)", "⚙️ ตั้งค่าระบบ"])
-# ------------------------------------------
-# หน้า 1: Dashboard (จัดเต็ม + AI สรุป)
-# ------------------------------------------
+
 if menu == "📊 Dashboard":
     st.title("📊 Dashboard & 🤖 AI สรุปข้อมูล")
     
-    # --- 1. คำนวณสถิติพื้นฐาน ---
     total_books = len(st.session_state.books_data)
     active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
     finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
@@ -121,7 +116,6 @@ if menu == "📊 Dashboard":
         df_finance['ยอดสุทธิ'] = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').fillna(0)
         total_revenue = df_finance['ยอดสุทธิ'].sum()
 
-    # --- 2. การ์ดสรุปตัวเลข ---
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books} เรื่อง</h2></div>", unsafe_allow_html=True)
     with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books} เรื่อง</h2></div>", unsafe_allow_html=True)
@@ -129,13 +123,9 @@ if menu == "📊 Dashboard":
     with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิ</h3><h2>฿{total_revenue:,.2f}</h2></div>", unsafe_allow_html=True)
 
     st.markdown("---")
-
-   # --- 3. โหมด AI สรุปข้อมูล (Smart Insights) ---
     st.subheader("🤖 AI สรุปวิเคราะห์ข้อมูล (Smart Insights)")
     
     insights = []
-    
-    # วิเคราะห์ความคืบหน้านิยาย
     if total_books > 0:
         near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and int(b.get('ตอนปัจจุบัน', 0)) >= int(b.get('เป้าหมาย', 150)) * 0.8]
         if near_finish:
@@ -143,14 +133,10 @@ if menu == "📊 Dashboard":
         else:
             insights.append("✍️ **สถานะการแปล:** ตอนนี้นิยายส่วนใหญ่ยังอยู่ในช่วงเร่งปั่น สู้ๆ นะครับแอดมินและทีม QC ทุกคน!")
             
-    # วิเคราะห์การเงินและรายได้ (ใส่เกราะป้องกัน Error idxmax)
     if not df_finance.empty and total_revenue > 0:
         try:
-            # จับกลุ่มข้อมูลก่อน
             grouped_plat = df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum()
             grouped_book = df_finance.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum()
-            
-            # ถ้ากลุ่มข้อมูลไม่ว่างเปล่า ค่อยหาแชมป์
             if not grouped_plat.empty and not grouped_book.empty:
                 top_platform = grouped_plat.idxmax()
                 top_book = grouped_book.idxmax()
@@ -161,84 +147,11 @@ if menu == "📊 Dashboard":
     else:
         insights.append("💰 **บัญชีรายรับ:** ระบบรอพี่นกแก้วมาบันทึกยอดขายก้อนแรกอยู่นะครับ!")
 
-    # แสดงผลข้อความจาก AI
-    for msg in insights:
-        st.success(msg)
-
+    for msg in insights: st.success(msg)
     st.markdown("---")
-# ------------------------------------------
-# หน้าใหม่: 💰 แบ่งรายได้ (QC)
-# ------------------------------------------
-elif menu == "💰 แบ่งรายได้ (QC)":
-    st.title("💰 ระบบสรุปส่วนแบ่งรายได้ (QC)")
-    
-    if st.session_state.finance_db.empty or not st.session_state.books_data:
-        st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้ในระบบ โปรดบันทึกข้อมูลก่อนครับ")
-    else:
-        # 1. เตรียมข้อมูล
-        df_fin = st.session_state.finance_db.copy()
-        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']]
-        
-        # เชื่อมข้อมูล
-        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
-        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
-        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
-        
-        # 2. สรุปยอดรวมแยกคน
-        st.subheader("👥 ยอดรวมรายได้แยกตามผู้ดูแล")
-        total_all = df_merge['ยอดสุทธิ'].sum()
-        rev_tong = df_merge[df_merge['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
-        rev_tao = df_merge[df_merge['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
-        
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown(f"<div class='metric-card'><h3>💖 ยอดของ ตอง</h3><h2 style='color:#6C63FF;'>฿{rev_tong:,.2f}</h2></div>", unsafe_allow_html=True)
-        with c2: st.markdown(f"<div class='metric-card'><h3>💙 ยอดของ ตาว</h3><h2 style='color:#FF6584;'>฿{rev_tao:,.2f}</h2></div>", unsafe_allow_html=True)
-        with c3: st.markdown(f"<div class='metric-card'><h3>🌍 ยอดรวมทั้งหมด</h3><h2>฿{total_all:,.2f}</h2></div>", unsafe_allow_html=True)
 
-        st.markdown("---")
-
-        # 3. วิเคราะห์อันดับนิยายขายดี
-        st.subheader("🏆 วิเคราะห์อันดับขายดี")
-        tab1, tab2 = st.tabs(["🌟 ขายดีตลอดกาล", "📅 ขายดีประจำเดือนนี้"])
-        
-        with tab1:
-            st.write("#### 👑 Top 5 นิยายทำเงินสูงสุด (All Time)")
-            best_all = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
-            if not best_all.empty:
-                fig_best_all = px.bar(best_all, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', 
-                                      text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale='Viridis')
-                fig_best_all.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-                st.plotly_chart(fig_best_all, use_container_width=True)
-
-        with tab2:
-            current_month = datetime.now().month
-            current_year = datetime.now().year
-            df_month = df_merge[(df_merge['วันที่'].dt.month == current_month) & (df_merge['วันที่'].dt.year == current_year)]
-            if not df_month.empty:
-                st.write(f"#### ✨ ดาวรุ่งประจำเดือน {current_month}/{current_year}")
-                best_month = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
-                st.table(best_month.style.format({'ยอดสุทธิ': '{:,.2f} ฿'}))
-            else:
-                st.info("🌙 เดือนนี้ยังไม่มีการบันทึกรายรับครับ")
-
-        st.markdown("---")
-        
-        # 4. ตารางแจกแจงละเอียด
-        st.subheader("📝 ตารางแจกแจงรายได้ละเอียด")
-        view_mode = st.radio("เลือกมุมมอง", ["ดูทั้งหมด", "เฉพาะตอง", "เฉพาะตาว"], horizontal=True)
-        
-        if view_mode == "เฉพาะตอง":
-            df_display = df_merge[df_merge['QC'] == 'ตอง']
-        elif view_mode == "เฉพาะตาว":
-            df_display = df_merge[df_merge['QC'] == 'ตาว']
-        else:
-            df_display = df_merge
-            
-        st.dataframe(df_display[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('วันที่', ascending=False), use_container_width=True)
-    # --- 4. กราฟภาพรวม (Charts) ---
     st.subheader("📈 กราฟสรุปภาพรวม")
     chart_col1, chart_col2 = st.columns(2)
-    
     with chart_col1:
         if total_books > 0:
             df_books = pd.DataFrame(st.session_state.books_data)
@@ -246,8 +159,7 @@ elif menu == "💰 แบ่งรายได้ (QC)":
             cat_counts.columns = ['หมวดหมู่', 'จำนวน']
             fig_cat = px.pie(cat_counts, values='จำนวน', names='หมวดหมู่', title='สัดส่วนนิยายแยกตามหมวดหมู่', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
             st.plotly_chart(fig_cat, use_container_width=True)
-        else:
-            st.info("ยังไม่มีข้อมูลนิยายสำหรับสร้างกราฟ")
+        else: st.info("ยังไม่มีข้อมูลนิยายสำหรับสร้างกราฟ")
 
     with chart_col2:
         if not df_finance.empty and total_revenue > 0:
@@ -255,8 +167,9 @@ elif menu == "💰 แบ่งรายได้ (QC)":
             fig_plat = px.bar(plat_rev, x='แพลตฟอร์ม', y='ยอดสุทธิ', title='รายได้สุทธิแยกตามแพลตฟอร์ม', text='ยอดสุทธิ', color='แพลตฟอร์ม', color_discrete_sequence=px.colors.qualitative.Pastel)
             fig_plat.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
             st.plotly_chart(fig_plat, use_container_width=True)
-        else:
-            st.info("ยังไม่มีข้อมูลรายรับสำหรับสร้างกราฟ")
+        else: st.info("ยังไม่มีข้อมูลรายรับสำหรับสร้างกราฟ")
+
+elif menu == "📚 คลังนิยาย":
     st.title("📚 จัดการคลังนิยาย")
     col_ref, _ = st.columns([1, 4])
     if col_ref.button("🔄 ดึงข้อมูลล่าสุด"): load_data(); st.rerun()
@@ -375,6 +288,81 @@ elif menu == "💰 บัญชีรายรับ":
                 
     st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
     if st.button("💾 บันทึกตารางบัญชีล่าสุด"): save_all_to_sheets()
+
+elif menu == "💰 แบ่งรายได้ (QC)":
+    st.title("💰 ระบบสรุปส่วนแบ่งรายได้ (QC)")
+    
+    if st.session_state.finance_db.empty or not st.session_state.books_data:
+        st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้ในระบบ โปรดบันทึกข้อมูลก่อนครับ")
+    else:
+        # เตรียมข้อมูลและเชื่อมตาราง
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']]
+        
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        
+        # จัดฟอร์แมตเดือน-ปี แบบดูง่ายๆ
+        df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
+        
+        st.subheader("📅 สรุปยอดแบ่งรายได้ (รายเดือน)")
+        
+        # ระบบเลือกเดือนอัจฉริยะ
+        available_months = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
+        if not available_months:
+            available_months = [datetime.now().strftime('%Y-%m')]
+            
+        selected_month = st.selectbox("📌 เลือกรอบเดือนที่ต้องการสรุปยอด", available_months)
+        
+        # กรองข้อมูลเฉพาะเดือนที่เลือก
+        df_month = df_merge[df_merge['เดือน-ปี'] == selected_month]
+        
+        total_month = df_month['ยอดสุทธิ'].sum()
+        rev_tong_month = df_month[df_month['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
+        rev_tao_month = df_month[df_month['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
+
+        c1, c2, c3 = st.columns(3)
+        with c1: st.markdown(f"<div class='metric-card'><h3>💖 ยอดของ ตอง</h3><h2 style='color:#6C63FF;'>฿{rev_tong_month:,.2f}</h2><p style='color:gray; font-size:12px;'>ประจำเดือน {selected_month}</p></div>", unsafe_allow_html=True)
+        with c2: st.markdown(f"<div class='metric-card'><h3>💙 ยอดของ ตาว</h3><h2 style='color:#FF6584;'>฿{rev_tao_month:,.2f}</h2><p style='color:gray; font-size:12px;'>ประจำเดือน {selected_month}</p></div>", unsafe_allow_html=True)
+        with c3: st.markdown(f"<div class='metric-card'><h3>🌍 รวมทั้งเดือน</h3><h2>฿{total_month:,.2f}</h2><p style='color:gray; font-size:12px;'>ยอดสุทธิทั้งหมด</p></div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        st.subheader("🏆 วิเคราะห์อันดับขายดี")
+        tab1, tab2 = st.tabs(["📅 ขายดีประจำเดือนที่เลือก", "🌟 ขายดีตลอดกาล"])
+        
+        with tab1:
+            if not df_month.empty:
+                st.write(f"#### ✨ Top 5 ดาวรุ่งประจำเดือน {selected_month}")
+                best_month = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
+                fig_best_m = px.bar(best_month, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale='Sunset')
+                fig_best_m.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
+                st.plotly_chart(fig_best_m, use_container_width=True)
+            else:
+                st.info(f"เดือน {selected_month} ยังไม่มีการบันทึกรายรับครับ")
+
+        with tab2:
+            st.write("#### 👑 Top 5 นิยายทำเงินสูงสุด (All Time)")
+            best_all = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
+            if not best_all.empty:
+                fig_best_all = px.bar(best_all, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale='Viridis')
+                fig_best_all.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
+                st.plotly_chart(fig_best_all, use_container_width=True)
+
+        st.markdown("---")
+        
+        st.subheader("📝 ตารางแจกแจงรายได้ละเอียด")
+        view_mode = st.radio("เลือกมุมมองข้อมูล", ["ดูทั้งหมด", "เฉพาะนิยายของตอง", "เฉพาะนิยายของตาว"], horizontal=True)
+        
+        if view_mode == "เฉพาะนิยายของตอง":
+            df_display = df_month[df_month['QC'] == 'ตอง']
+        elif view_mode == "เฉพาะนิยายของตาว":
+            df_display = df_month[df_month['QC'] == 'ตาว']
+        else:
+            df_display = df_month
+            
+        st.dataframe(df_display[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('วันที่', ascending=False), use_container_width=True)
 
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
