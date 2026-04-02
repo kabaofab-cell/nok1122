@@ -27,6 +27,7 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
+    # โหลดคลังนิยาย
     try:
         df_books = conn.read(worksheet="Books", ttl=0)
         books = df_books.to_dict('records')
@@ -43,12 +44,14 @@ def load_data():
     except:
         st.session_state.books_data = []
 
+    # โหลดบัญชีรายรับ
     try:
         st.session_state.finance_db = conn.read(worksheet="Finance", ttl=0)
         if st.session_state.finance_db.empty: raise Exception
     except:
         st.session_state.finance_db = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
 
+    # โหลดการตั้งค่า
     try:
         df_settings = conn.read(worksheet="Settings", ttl=0)
         st.session_state.app_settings = {
@@ -60,9 +63,11 @@ def load_data():
 
 def save_all_to_sheets():
     try:
+        # เตรียมข้อมูล Books
         books_to_save = []
         for b in st.session_state.books_data:
             temp = b.copy()
+            if '_orig_idx' in temp: del temp['_orig_idx'] # เอาตัวแปรค้นหาออกก่อนเซฟ
             temp['ลิงก์อ่าน'] = json.dumps(b.get('ลิงก์อ่าน', []))
             temp['ลิงก์ต้นฉบับ'] = json.dumps(b.get('ลิงก์ต้นฉบับ', []))
             books_to_save.append(temp)
@@ -70,6 +75,8 @@ def save_all_to_sheets():
         df_books_save = pd.DataFrame(books_to_save)
         if df_books_save.empty:
             df_books_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
+        
+        # บันทึกทั้ง 3 ชีต
         conn.update(worksheet="Books", data=df_books_save)
         conn.update(worksheet="Finance", data=st.session_state.finance_db)
         
@@ -78,10 +85,12 @@ def save_all_to_sheets():
             "platforms": pd.Series(st.session_state.app_settings['platforms'])
         })
         conn.update(worksheet="Settings", data=settings_df)
-        st.toast("✅ ซิงค์ข้อมูลกับ Google Sheets สำเร็จ!")
+        
+        st.toast("✅ บันทึกข้อมูลลง Google Sheets สำเร็จเรียบร้อย!")
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาดในการบันทึก: {e}")
 
+# ดึงข้อมูลเมื่อเข้าเว็บครั้งแรก
 if 'books_data' not in st.session_state: load_data()
 
 # ==========================================
@@ -251,22 +260,33 @@ elif menu == "💰 บัญชีรายรับ":
     if st.button("💾 บันทึกตารางบัญชีล่าสุด"): save_all_to_sheets()
 
 # ------------------------------------------
-# หน้า 4: ตั้งค่า
+# หน้า 4: ตั้งค่าระบบ (ปรับตารางแก้ไขได้แล้ว)
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
+    st.info("💡 คำแนะนำ: พิมพ์ในช่องว่างเพื่อเพิ่ม, คลิกที่ตัวหนังสือเพื่อแก้ไข, หรือเลือกแถวแล้วกดไอคอนถังขยะเพื่อ 'ลบ' ครับ")
+    
     c1, c2 = st.columns(2)
+    
     with c1:
-        st.subheader("เพิ่มหมวดหมู่นิยาย")
-        new_cat = st.text_input("ชื่อหมวดหมู่ใหม่")
-        if st.button("บันทึกหมวดหมู่"):
-            if new_cat and new_cat not in st.session_state.app_settings['categories']:
-                st.session_state.app_settings['categories'].append(new_cat)
-                save_all_to_sheets(); st.rerun()
+        st.subheader("📚 หมวดหมู่นิยาย")
+        df_cat = pd.DataFrame(st.session_state.app_settings['categories'], columns=['ชื่อหมวดหมู่'])
+        edited_cat = st.data_editor(df_cat, num_rows="dynamic", use_container_width=True, key="edit_cat")
+        
     with c2:
-        st.subheader("เพิ่มแพลตฟอร์มรายได้")
-        new_plat = st.text_input("ชื่อแพลตฟอร์มใหม่")
-        if st.button("บันทึกแพลตฟอร์ม"):
-            if new_plat and new_plat not in st.session_state.app_settings['platforms']:
-                st.session_state.app_settings['platforms'].append(new_plat)
-                save_all_to_sheets(); st.rerun()
+        st.subheader("🌐 แพลตฟอร์มรายได้")
+        df_plat = pd.DataFrame(st.session_state.app_settings['platforms'], columns=['ชื่อแพลตฟอร์ม'])
+        edited_plat = st.data_editor(df_plat, num_rows="dynamic", use_container_width=True, key="edit_plat")
+
+    st.markdown("---")
+    
+    if st.button("💾 บันทึกการตั้งค่าทั้งหมด"):
+        # กรองข้อมูลเอาช่องว่างออก
+        updated_categories = edited_cat['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
+        updated_platforms = edited_plat['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
+        
+        st.session_state.app_settings['categories'] = updated_categories
+        st.session_state.app_settings['platforms'] = updated_platforms
+        
+        save_all_to_sheets()
+        st.rerun()
