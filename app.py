@@ -103,8 +103,7 @@ if 'books_data' not in st.session_state: load_data()
 # ==========================================
 st.sidebar.markdown("<h1 style='text-align: center;'>💎 Nok-kaew Admin</h1>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "⚙️ ตั้งค่าระบบ"])
-
+menu = st.sidebar.radio("เมนูหลัก", ["📊 Dashboard", "📚 คลังนิยาย", "💰 บัญชีรายรับ", "💰 แบ่งรายได้ (QC)", "⚙️ ตั้งค่าระบบ"])
 # ------------------------------------------
 # หน้า 1: Dashboard (จัดเต็ม + AI สรุป)
 # ------------------------------------------
@@ -167,7 +166,75 @@ if menu == "📊 Dashboard":
         st.success(msg)
 
     st.markdown("---")
+# ------------------------------------------
+# หน้าใหม่: 💰 แบ่งรายได้ (QC)
+# ------------------------------------------
+elif menu == "💰 แบ่งรายได้ (QC)":
+    st.title("💰 ระบบสรุปส่วนแบ่งรายได้ (QC)")
+    
+    if st.session_state.finance_db.empty or not st.session_state.books_data:
+        st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้ในระบบ โปรดบันทึกข้อมูลก่อนครับ")
+    else:
+        # 1. เตรียมข้อมูล
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']]
+        
+        # เชื่อมข้อมูล
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        
+        # 2. สรุปยอดรวมแยกคน
+        st.subheader("👥 ยอดรวมรายได้แยกตามผู้ดูแล")
+        total_all = df_merge['ยอดสุทธิ'].sum()
+        rev_tong = df_merge[df_merge['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
+        rev_tao = df_merge[df_merge['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
+        
+        c1, c2, c3 = st.columns(3)
+        with c1: st.markdown(f"<div class='metric-card'><h3>💖 ยอดของ ตอง</h3><h2 style='color:#6C63FF;'>฿{rev_tong:,.2f}</h2></div>", unsafe_allow_html=True)
+        with c2: st.markdown(f"<div class='metric-card'><h3>💙 ยอดของ ตาว</h3><h2 style='color:#FF6584;'>฿{rev_tao:,.2f}</h2></div>", unsafe_allow_html=True)
+        with c3: st.markdown(f"<div class='metric-card'><h3>🌍 ยอดรวมทั้งหมด</h3><h2>฿{total_all:,.2f}</h2></div>", unsafe_allow_html=True)
 
+        st.markdown("---")
+
+        # 3. วิเคราะห์อันดับนิยายขายดี
+        st.subheader("🏆 วิเคราะห์อันดับขายดี")
+        tab1, tab2 = st.tabs(["🌟 ขายดีตลอดกาล", "📅 ขายดีประจำเดือนนี้"])
+        
+        with tab1:
+            st.write("#### 👑 Top 5 นิยายทำเงินสูงสุด (All Time)")
+            best_all = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
+            if not best_all.empty:
+                fig_best_all = px.bar(best_all, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', 
+                                      text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale='Viridis')
+                fig_best_all.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
+                st.plotly_chart(fig_best_all, use_container_width=True)
+
+        with tab2:
+            current_month = datetime.now().month
+            current_year = datetime.now().year
+            df_month = df_merge[(df_merge['วันที่'].dt.month == current_month) & (df_merge['วันที่'].dt.year == current_year)]
+            if not df_month.empty:
+                st.write(f"#### ✨ ดาวรุ่งประจำเดือน {current_month}/{current_year}")
+                best_month = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).head(5).reset_index()
+                st.table(best_month.style.format({'ยอดสุทธิ': '{:,.2f} ฿'}))
+            else:
+                st.info("🌙 เดือนนี้ยังไม่มีการบันทึกรายรับครับ")
+
+        st.markdown("---")
+        
+        # 4. ตารางแจกแจงละเอียด
+        st.subheader("📝 ตารางแจกแจงรายได้ละเอียด")
+        view_mode = st.radio("เลือกมุมมอง", ["ดูทั้งหมด", "เฉพาะตอง", "เฉพาะตาว"], horizontal=True)
+        
+        if view_mode == "เฉพาะตอง":
+            df_display = df_merge[df_merge['QC'] == 'ตอง']
+        elif view_mode == "เฉพาะตาว":
+            df_display = df_merge[df_merge['QC'] == 'ตาว']
+        else:
+            df_display = df_merge
+            
+        st.dataframe(df_display[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('วันที่', ascending=False), use_container_width=True)
     # --- 4. กราฟภาพรวม (Charts) ---
     st.subheader("📈 กราฟสรุปภาพรวม")
     chart_col1, chart_col2 = st.columns(2)
