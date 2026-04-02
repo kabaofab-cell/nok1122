@@ -74,6 +74,10 @@ st.markdown("""
     .rank-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(108,99,255,0.15); border-color: #6C63FF; }
     .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
     
+    .ai-main { background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%); border-left: 6px solid #6C63FF; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(108,99,255,0.1); margin-bottom: 15px; }
+    .ai-tong { background: linear-gradient(135deg, #fff0f3 0%, #ffffff 100%); border-left: 6px solid #FF6584; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(255,101,132,0.1); margin-bottom: 15px; }
+    .ai-tao { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-left: 6px solid #38bdf8; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(56,189,248,0.1); margin-bottom: 15px; }
+    
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -107,9 +111,9 @@ def load_data():
             b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
             b['หมวดหมู่'] = b.get('หมวดหมู่', 'ทั่วไป')
             b['QC'] = b.get('QC', 'ตอง')
-            b['หมายเหตุ'] = b.get('หมายเหตุ', '')
-            b['เรื่องย่อ'] = b.get('เรื่องย่อ', '')
-            b['ภาพปก'] = b.get('ภาพปก', '')
+            b['หมายเหตุ'] = str(b.get('หมายเหตุ', '')) if pd.notna(b.get('หมายเหตุ')) else ''
+            b['เรื่องย่อ'] = str(b.get('เรื่องย่อ', '')) if pd.notna(b.get('เรื่องย่อ')) else ''
+            b['ภาพปก'] = str(b.get('ภาพปก', '')) if pd.notna(b.get('ภาพปก')) else ''
             b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
             b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
         st.session_state.books_data = books
@@ -152,7 +156,7 @@ if 'books_data' not in st.session_state: load_data()
 st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
 menu = st.sidebar.radio("Navigation Menu", ["📊 Dashboard", "📚 คลังนิยาย", "⚡ แก้ไขด่วน (Quick Edit)", "📢 แนะนำนิยาย", "💰 บัญชีรายรับ", "💸 สรุปส่วนแบ่ง (QC)", "🏆 อันดับนิยายขายดี", "⚙️ ตั้งค่าระบบ"])
 
-# เคลียร์สถานะถ้าเปลี่ยนหน้าเมนู
+# เคลียร์สถานะเมื่อเปลี่ยนหน้า
 if menu != "📚 คลังนิยาย": st.session_state.selected_book_idx = None
 if menu != "📢 แนะนำนิยาย": st.session_state.selected_promo_idx = None
 
@@ -172,9 +176,68 @@ if menu == "📊 Dashboard":
     with col1: st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books}</h2></div>", unsafe_allow_html=True)
     with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books}</h2></div>", unsafe_allow_html=True)
     with col3: st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books}</h2></div>", unsafe_allow_html=True)
-    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิ</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิรวม</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
+
     st.markdown("---")
+    st.title("🤖 AI Executive Report (รายงานเจาะลึก)")
     
+    if not df_finance.empty and st.session_state.books_data:
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'หมวดหมู่', 'ตอนปัจจุบัน', 'เป้าหมาย', 'สถานะ']]
+        df_merge = pd.merge(df_finance, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        
+        top_cat = df_merge.groupby('หมวดหมู่')['ยอดสุทธิ'].sum().idxmax() if 'หมวดหมู่' in df_merge else "ไม่มีข้อมูล"
+        top_book = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
+        
+        main_insight = f"""
+        <div class="ai-main">
+            <h4 style="color:#6C63FF; margin-bottom:10px;">🌟 ภาพรวมและทิศทางอนาคต (Overall Trends)</h4>
+            <p><b>นิยายชูโรงของเรา:</b> ตอนนี้เรื่อง <b>"{top_book}"</b> ยืนหนึ่งเรื่องการสร้างรายได้ครับ ในขณะที่หมวดหมู่ที่นักอ่านเปย์หนักที่สุดตกเป็นของ <b>"{top_cat}"</b></p>
+            <p><b>💡 AI ขอแนะนำ:</b> ในการซื้อลิขสิทธิ์เรื่องต่อไป แนะนำให้เล็งหมวด <b>"{top_cat}"</b> เพิ่มเติมครับ เพราะฐานคนอ่านของเราชอบแนวนี้เป็นพิเศษ</p>
+        """
+        if near_finish:
+            main_insight += f"<p><b>🚀 โอกาสทอง:</b> มีนิยายที่แปลไปแล้วเกิน 80% คือ <b>{', '.join(near_finish)}</b> เตรียมจัดแพ็กเกจ E-Book หรือติดเหรียญโปรโมทตอนจบได้เลยครับ คาดว่ายอดจะพุ่งกระฉูดแน่นอน!</p>"
+        main_insight += "</div>"
+        st.markdown(main_insight, unsafe_allow_html=True)
+        
+        col_qc1, col_qc2 = st.columns(2)
+        with col_qc1:
+            df_tong = df_merge[df_merge['QC'] == 'ตอง']
+            if not df_tong.empty and df_tong['ยอดสุทธิ'].sum() > 0:
+                tong_top = df_tong.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                tong_rev = df_tong['ยอดสุทธิ'].sum()
+                st.markdown(f"""
+                <div class="ai-tong">
+                    <h4 style="color:#FF6584; margin-bottom:10px;">💖 ผลงานของ ตอง (Tong)</h4>
+                    <p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tong_rev:,.0f}</p>
+                    <p><b>ลูกรักทำเงิน:</b> เรื่อง <b>"{tong_top}"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p>
+                    <p><b>💡 คำแนะนำ:</b> ตองมีฝีมือในการดึงอารมณ์เรื่อง <b>"{tong_top}"</b> ได้ดีมาก แนะนำให้ดึงนิยายแนวคล้ายๆ กันมาให้ตองดูแลเพิ่ม เพื่อรักษาโมเมนตัมยอดขายไว้ครับ!</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ai-tong"><h4>💖 ตอง (Tong)</h4><p>กำลังรอสร้างผลงานยอดขายแรกอยู่ครับ สู้ๆ!</p></div>', unsafe_allow_html=True)
+                
+        with col_qc2:
+            df_tao = df_merge[df_merge['QC'] == 'ตาว']
+            if not df_tao.empty and df_tao['ยอดสุทธิ'].sum() > 0:
+                tao_top = df_tao.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                tao_rev = df_tao['ยอดสุทธิ'].sum()
+                st.markdown(f"""
+                <div class="ai-tao">
+                    <h4 style="color:#38bdf8; margin-bottom:10px;">💙 ผลงานของ ตาว (Tao)</h4>
+                    <p><b>ยอดเงินที่ทำได้รวม:</b> ฿{tao_rev:,.0f}</p>
+                    <p><b>ลูกรักทำเงิน:</b> เรื่อง <b>"{tao_top}"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p>
+                    <p><b>💡 คำแนะนำ:</b> หากตาวอัปเดตตอนของ <b>"{tao_top}"</b> อย่างสม่ำเสมอ หรือจัดกิจกรรมเล็กๆ ให้นักอ่าน จะช่วยบูสต์ยอดในเดือนหน้าให้ก้าวกระโดดได้อีกครับ!</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ai-tao"><h4>💙 ตาว (Tao)</h4><p>รอเปิดตัวยอดขายสุดปังอยู่ครับ เป็นกำลังใจให้!</p></div>', unsafe_allow_html=True)
+
+    else:
+        st.info("⚠️ ระบบ AI กำลังรอข้อมูลนิยายและยอดขายเพื่อทำการวิเคราะห์ให้พี่นกแก้วอยู่นะครับ")
+
+    st.markdown("---")
     st.subheader("📈 กราฟสรุปภาพรวม")
     c_c1, c_c2 = st.columns(2)
     with c_c1:
@@ -191,10 +254,10 @@ if menu == "📊 Dashboard":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📚 หน้า 2: คลังนิยาย (ระบบ Single Page View)
+# 📚 หน้า 2: คลังนิยาย (Single Page Edit)
 # ------------------------------------------
 elif menu == "📚 คลังนิยาย":
-    # 📌 กรณีอยู่ในหน้ารายละเอียดเดี่ยว (Detailed Edit View)
+    # 📌 โหมดแก้ไขแบบเต็มจอ
     if st.session_state.selected_book_idx is not None:
         idx = st.session_state.selected_book_idx
         b = st.session_state.books_data[idx]
@@ -259,7 +322,7 @@ elif menu == "📚 คลังนิยาย":
             st.dataframe(df_this[['วันที่', 'แพลตฟอร์ม', 'ยอดสุทธิ']].sort_values('วันที่', ascending=False), use_container_width=True)
         else: st.warning("ยังไม่มีการบันทึกรายได้")
 
-    # 📌 กรณีอยู่หน้าหลัก (Gallery View)
+    # 📌 โหมดแกลลอรี่
     else:
         st.title("📚 จัดการคลังนิยาย")
         col_ref, _ = st.columns([1, 4])
@@ -294,7 +357,6 @@ elif menu == "📚 คลังนิยาย":
             b['_orig_idx'] = idx 
             filtered_books.append(b)
 
-        # วาดแกลลอรี่นิยาย 4 คอลัมน์
         for i in range(0, len(filtered_books), 4):
             cols = st.columns(4)
             for j, col in enumerate(cols):
@@ -305,7 +367,6 @@ elif menu == "📚 คลังนิยาย":
                         safe_image(b.get('ภาพปก'))
                         st.markdown(f"<div style='font-size:15px; font-weight:600; line-height:1.3; margin-bottom:5px;'>{b['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
                         
-                        # ป้ายสถานะ
                         stat_color = "#28a745" if b.get('สถานะ') == 'จบแล้ว' else ("#ffc107" if b.get('สถานะ') == 'พักการแปล' else "#17a2b8")
                         st.markdown(f"<span style='color:{stat_color}; font-size:13px; font-weight:600;'>● {b.get('สถานะ')}</span>", unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
@@ -319,7 +380,7 @@ elif menu == "📚 คลังนิยาย":
 # ⚡ หน้า 3: แก้ไขด่วน (Quick Edit)
 # ------------------------------------------
 elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
-    st.title("⚡ ระบบแก้ไขด่วนแบบตาราง (Quick Edit)")
+    st.title("⚡ ระบบแก้ไขด่วนแบบตาราง")
     st.info("💡 แก้ไขข้อมูลในตารางได้อิสระ แล้วกดปุ่ม 'บันทึกการเปลี่ยนแปลงทั้งหมด' ด้านล่างเพื่ออัปเดตพร้อมกัน")
     if not st.session_state.books_data: st.warning("ไม่มีข้อมูลนิยาย")
     else:
@@ -330,7 +391,7 @@ elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
             column_config={
                 "หมวดหมู่": st.column_config.SelectboxColumn("หมวดหมู่", options=st.session_state.app_settings['categories'], required=True),
                 "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True),
-                "QC": st.column_config.SelectboxColumn("ผู้ดูแล (QC)", options=["ตอง", "ตาว"], required=True),
+                "QC": st.column_config.SelectboxColumn("QC", options=["ตอง", "ตาว"], required=True),
                 "ตอนปัจจุบัน": st.column_config.NumberColumn("แปลแล้ว (ตอน)", min_value=0),
                 "เป้าหมาย": st.column_config.NumberColumn("ต้นฉบับ (ตอน)", min_value=1)
             }, use_container_width=True, num_rows="fixed", height=500
@@ -343,10 +404,9 @@ elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
         if c_reset.button("🔄 ล้างค่า/โหลดใหม่"): load_data(); st.rerun()
 
 # ------------------------------------------
-# 📢 หน้าใหม่: แนะนำนิยาย (Promo Page)
+# 📢 หน้า 4: แนะนำนิยาย (Promo Page)
 # ------------------------------------------
 elif menu == "📢 แนะนำนิยาย":
-    # 📌 โหมดแสดงโปสเตอร์พร้อมแคปจอ (Detailed View)
     if st.session_state.selected_promo_idx is not None:
         idx = st.session_state.selected_promo_idx
         b = st.session_state.books_data[idx]
@@ -356,11 +416,15 @@ elif menu == "📢 แนะนำนิยาย":
             st.session_state.selected_promo_idx = None
             st.rerun()
         
-        # กล่อง HTML พิเศษ ออกแบบมาเพื่อแคปหน้าจอโดยเฉพาะ
         img_url = b.get('ภาพปก') if b.get('ภาพปก') else "https://via.placeholder.com/300x450?text=No+Cover"
-        synopsis_text = b.get('เรื่องย่อ', 'ยังไม่มีการระบุเรื่องย่อสำหรับนิยายเรื่องนี้').replace('\n', '<br>')
         
-        # จัดการลิงก์แพลตฟอร์ม
+        # 🛡️ ระบบดักจับบั๊ก Null-safe (เปลี่ยนค่าว่างให้เป็น string ก่อนจัดบรรทัด)
+        synopsis_val = str(b.get('เรื่องย่อ', ''))
+        if not synopsis_val or synopsis_val.strip() == '' or synopsis_val.lower() == 'nan':
+            synopsis_text = 'ยังไม่มีการระบุเรื่องย่อสำหรับนิยายเรื่องนี้'
+        else:
+            synopsis_text = synopsis_val.replace('\n', '<br>')
+        
         links_html = ""
         for link in b.get('ลิงก์อ่าน', []):
             if link.get('url'):
@@ -395,15 +459,13 @@ elif menu == "📢 แนะนำนิยาย":
         </div>
         """
         st.markdown(promo_html, unsafe_allow_html=True)
-        st.info("📸 **Tip:** เลื่อนจัดหน้าจอให้สวยงาม แล้วสามารถแคปเจอร์หน้าต่างด้านบนไปโพสต์โปรโมทได้เลยครับ!")
+        st.info("📸 **Tip:** เลื่อนจัดหน้าจอให้สวยงาม แล้วแคปเจอร์เพื่อนำไปโพสต์ได้เลยครับ!")
 
-    # 📌 โหมดแกลลอรี่ (Gallery View)
     else:
         st.title("📢 สร้างภาพโปรโมทนิยาย")
         st.write("เลือกนิยายที่ต้องการ เพื่อสร้างภาพพร้อมเรื่องย่อสำหรับแคปหน้าจอไปโปรโมท")
         st.markdown("---")
         
-        # วาดแกลลอรี่ 4 คอลัมน์
         for i in range(0, len(st.session_state.books_data), 4):
             cols = st.columns(4)
             for j, col in enumerate(cols):
@@ -413,13 +475,13 @@ elif menu == "📢 แนะนำนิยาย":
                         st.markdown("<div class='rank-card'>", unsafe_allow_html=True)
                         safe_image(b.get('ภาพปก'))
                         st.markdown(f"<div style='font-size:15px; font-weight:600; line-height:1.3; margin-bottom:15px;'>{b['ชื่อเรื่อง']}</div>", unsafe_allow_html=True)
-                        if st.button("👁️ ดูตัวอย่างโปรโมท", key=f"promo_{i+j}", use_container_width=True):
+                        if st.button("👁️ สร้างภาพโปรโมท", key=f"promo_{i+j}", use_container_width=True):
                             st.session_state.selected_promo_idx = i+j
                             st.rerun()
                         st.markdown("</div>", unsafe_allow_html=True)
 
 # ------------------------------------------
-# 💰 หน้า 4: บัญชีรายรับ
+# 💰 หน้า 5: บัญชีรายรับ
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บันทึกบัญชีรายรับ")
@@ -442,7 +504,7 @@ elif menu == "💰 บัญชีรายรับ":
         st.session_state.finance_db = edited_finance; save_all_to_sheets(); st.rerun()
 
 # ------------------------------------------
-# 💸 หน้า 5: แบ่งรายได้ (QC)
+# 💸 หน้า 6: แบ่งรายได้ (QC)
 # ------------------------------------------
 elif menu == "💸 สรุปส่วนแบ่ง (QC)":
     st.title("💸 ระบบสรุปส่วนแบ่งรายได้ (QC)")
@@ -475,7 +537,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 6: อันดับนิยายขายดี
+# 🏆 หน้า 7: อันดับนิยายขายดี
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -546,7 +608,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
                 draw_top_10_html(df_tao, "🌟 ตลอดกาล", "split-box-pink")
 
 # ------------------------------------------
-# ⚙️ หน้า 7: ตั้งค่าระบบ
+# ⚙️ หน้า 8: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
