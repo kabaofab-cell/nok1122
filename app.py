@@ -149,7 +149,6 @@ def load_settings():
     except:
         return {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
 
-# 📢 ฟังก์ชันดึงข้อมูลประกาศ
 @st.cache_data(ttl=300)
 def load_announcements():
     try: return conn.read(worksheet="Announcements", ttl=0)
@@ -179,11 +178,9 @@ def save_all():
         set_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
         conn.update(worksheet="Settings", data=set_df)
         
-        # 📢 บันทึกข้อมูลประกาศลง Sheets
         if not st.session_state.announcements_db.empty:
             conn.update(worksheet="Announcements", data=st.session_state.announcements_db)
         else:
-            # ถ้าตารางว่าง ให้สร้างตารางเปล่าพร้อมชื่อคอลัมน์
             conn.update(worksheet="Announcements", data=pd.DataFrame(columns=['วันที่', 'หัวข้อประกาศ', 'เนื้อหา', 'สถานะ']))
             
         st.cache_data.clear()
@@ -194,9 +191,12 @@ def save_all():
 # 📱 3. ระบบนำทาง (Sidebar)
 # ==========================================
 st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
-menu = st.sidebar.radio("Navigation Menu", [
+
+# 🚀 เพิ่มการใช้งาน Session State เก็บสถานะของเมนู เพื่อให้วาร์ปข้ามหน้าได้
+menu_options = [
     "📊 Dashboard", 
     "📚 คลังนิยาย", 
+    "📝 อัปเดตตอนใหม่",   # <--- เมนูใหม่สำหรับอัปเดตงานรายวันโดยเฉพาะ
     "⚡ แก้ไขด่วน (Quick Edit)", 
     "📢 แนะนำนิยาย", 
     "📰 จัดการประกาศ",
@@ -204,7 +204,12 @@ menu = st.sidebar.radio("Navigation Menu", [
     "💸 สรุปส่วนแบ่ง (QC)", 
     "🏆 อันดับนิยายขายดี", 
     "⚙️ ตั้งค่าระบบ"
-])
+]
+
+if 'main_menu' not in st.session_state:
+    st.session_state.main_menu = "📊 Dashboard"
+
+menu = st.sidebar.radio("Navigation Menu", menu_options, key="main_menu")
 
 if menu != "📚 คลังนิยาย": st.session_state.selected_book_idx = None
 if menu != "📢 แนะนำนิยาย": st.session_state.selected_promo_idx = None
@@ -411,7 +416,73 @@ elif menu == "📚 คลังนิยาย":
                             st.session_state.selected_book_idx = b['_orig_idx']; st.rerun()
 
 # ------------------------------------------
-# ⚡ หน้า 3: แก้ไขด่วน (Quick Edit)
+# 📝 หน้าใหม่: อัปเดตตอนใหม่ & ลิงก์ต้นฉบับ 🚀
+# ------------------------------------------
+elif menu == "📝 อัปเดตตอนใหม่":
+    st.title("📝 อัปเดตตอนใหม่ & วาร์ปต้นฉบับ")
+    st.info("💡 ค้นหานิยายที่กำลังแปล กดลิงก์เพื่อไปอ่านต้นฉบับภาษาเกาหลี แล้วกลับมาอัปเดตจำนวนตอนได้ทันที!")
+    
+    search_update = st.text_input("🔍 พิมพ์ชื่อเรื่องที่ต้องการอัปเดต...", key="search_update")
+    
+    filtered_for_update = []
+    for idx, b in enumerate(st.session_state.books_data):
+        if search_update and search_update.lower() not in b['ชื่อเรื่อง'].lower(): continue
+        b['_orig_idx'] = idx 
+        filtered_for_update.append(b)
+
+    if not filtered_for_update:
+        st.warning("ไม่พบนิยายที่ค้นหาครับ")
+    else:
+        for b in filtered_for_update:
+            idx = b['_orig_idx']
+            # สร้างกล่องพับเก็บได้สำหรับนิยายแต่ละเรื่อง
+            with st.expander(f"📖 {b['ชื่อเรื่อง']} | สถานะ: {b.get('สถานะ', '')} | ตอนที่แปลเสร็จ: {b.get('ตอนปัจจุบัน', 0)} / {b.get('เป้าหมาย', 1)}"):
+                c1, c2 = st.columns([1, 4])
+                
+                # โชว์รูปปกเล็กๆ ด้านซ้าย
+                with c1:
+                    img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/150x225?text=No+Cover"
+                    st.markdown(f"<img src='{img_url}' style='width:100%; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1);' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/150x225?text=Error';\">", unsafe_allow_html=True)
+                
+                # พื้นที่ควบคุมด้านขวา
+                with c2:
+                    st.markdown("#### ⚙️ อัปเดตตอนล่าสุด")
+                    c_input, c_btn = st.columns([2, 1])
+                    
+                    # 1. กล่องเพิ่มลดตอน
+                    new_chap = c_input.number_input("แก้ไขตอน (ตอนปัจจุบัน)", value=int(b.get('ตอนปัจจุบัน', 0)), min_value=0, key=f"upd_chap_{idx}")
+                    if c_btn.button("💾 บันทึกตอน", key=f"save_chap_{idx}", type="primary", use_container_width=True):
+                        st.session_state.books_data[idx]['ตอนปัจจุบัน'] = new_chap
+                        save_all()
+                        st.rerun()
+                        
+                    st.markdown("---")
+                    st.markdown("#### 🇰🇷 ลิงก์ต้นฉบับ & การจัดการ")
+                    c_link, c_manage = st.columns(2)
+                    
+                    # 2. ปุ่มวาร์ปลิงก์ต้นฉบับ
+                    with c_link:
+                        orig_links = b.get('ลิงก์ต้นฉบับ', [])
+                        has_link = False
+                        if isinstance(orig_links, list):
+                            for i, link in enumerate(orig_links):
+                                url = link.get('url', '')
+                                if url:
+                                    has_link = True
+                                    # สร้างปุ่มลิงก์ กระโดดไปเปิดแท็บใหม่ทันที
+                                    st.link_button(f"🔗 ไปยังเว็บต้นฉบับ {i+1}", url, use_container_width=True)
+                        if not has_link:
+                            st.warning("ยังไม่ได้ใส่ข้อมูลลิงก์ต้นฉบับในเรื่องนี้ครับ")
+                            
+                    # 3. ปุ่มทางลัดไปหน้าจัดการหลัก
+                    with c_manage:
+                        if st.button("🛠️ จัดการข้อมูลเต็ม (แก้ไขเรื่องย่อ/ปก)", key=f"go_edit_{idx}", use_container_width=True):
+                            st.session_state.selected_book_idx = idx
+                            st.session_state.main_menu = "📚 คลังนิยาย" # สั่งเปลี่ยนเมนูกลับไปหน้าคลังนิยายอัตโนมัติ
+                            st.rerun()
+
+# ------------------------------------------
+# ⚡ หน้า 4: แก้ไขด่วน (Quick Edit)
 # ------------------------------------------
 elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
     st.title("⚡ ระบบแก้ไขด่วนแบบตาราง")
@@ -436,7 +507,7 @@ elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
             save_all(); st.rerun()
 
 # ------------------------------------------
-# 📢 หน้า 4: แนะนำนิยาย (Promo Page)
+# 📢 หน้า 5: แนะนำนิยาย (Promo Page)
 # ------------------------------------------
 elif menu == "📢 แนะนำนิยาย":
     if st.session_state.selected_promo_idx is not None:
@@ -501,7 +572,7 @@ elif menu == "📢 แนะนำนิยาย":
                             st.session_state.selected_promo_idx = i+j; st.rerun()
 
 # ------------------------------------------
-# 📰 หน้า 5: จัดการประกาศ (แก้บั๊ก DateColumn แล้ว!)
+# 📰 หน้า 6: จัดการประกาศ
 # ------------------------------------------
 elif menu == "📰 จัดการประกาศ":
     st.title("📰 จัดการประกาศ (Announcements)")
@@ -532,7 +603,6 @@ elif menu == "📰 จัดการประกาศ":
     if st.session_state.announcements_db.empty:
         st.write("ยังไม่มีข้อมูลประกาศในระบบค๊า")
     else:
-        # 🛠️ เปลี่ยนจาก DateColumn เป็น TextColumn ธรรมดา เพื่อป้องกันบั๊ก Data Type Mismatch 100%
         edited_announce = st.data_editor(
             st.session_state.announcements_db, 
             num_rows="dynamic", 
@@ -548,7 +618,7 @@ elif menu == "📰 จัดการประกาศ":
             st.rerun()
 
 # ------------------------------------------
-# 💰 หน้า 6: บัญชีรายรับ
+# 💰 หน้า 7: บัญชีรายรับ
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บันทึกบัญชีรายรับ")
@@ -571,7 +641,7 @@ elif menu == "💰 บัญชีรายรับ":
         st.session_state.finance_db = edited_finance; save_all(); st.rerun()
 
 # ------------------------------------------
-# 💸 หน้า 7: แบ่งรายได้ (QC)
+# 💸 หน้า 8: แบ่งรายได้ (QC)
 # ------------------------------------------
 elif menu == "💸 สรุปส่วนแบ่ง (QC)":
     st.title("💸 ระบบสรุปส่วนแบ่งรายได้ (QC)")
@@ -603,7 +673,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 8: อันดับนิยายขายดี
+# 🏆 หน้า 9: อันดับนิยายขายดี
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -653,7 +723,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
             draw_top_10_html(df_merge, "🌟 ตลอดกาล (All-Time)", "split-box-pink")
 
 # ------------------------------------------
-# ⚙️ หน้า 9: ตั้งค่าระบบ
+# ⚙️ หน้า 10: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
