@@ -1,231 +1,666 @@
 import streamlit as st
 import pandas as pd
+import requests
 from streamlit_gsheets import GSheetsConnection
 import json
+import plotly.express as px
 from datetime import datetime
-import urllib.parse
-import random
 
 # ==========================================
-# 🎨 1. ตั้งค่าดีไซน์ & CSS (ฉบับซ่อน Toolbar)
+# 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
 # ==========================================
-st.set_page_config(page_title="Nok-kaew Library", layout="wide", page_icon="✨")
+IMGBB_API_KEY = "c2632e406b68246bd02423be8f9bf384"
+ADMIN_PASSWORD = "nokkaew2026" # <-- เปลี่ยนรหัสผ่านเข้าหลังบ้านตรงนี้
 
-if 'view_idx' not in st.session_state: st.session_state.view_idx = None
+st.set_page_config(page_title="Nok-kaew Admin Pro", layout="wide", page_icon="💎")
+
+# --- ระบบ Login ---
+if "auth" not in st.session_state: st.session_state.auth = False
+if not st.session_state.auth:
+    st.markdown("<h1 style='text-align:center; color:#6C63FF; margin-top:100px;'>💎 Nok-kaew Admin Login</h1>", unsafe_allow_html=True)
+    c_l, c_m, c_r = st.columns([1,2,1])
+    with c_m:
+        pwd = st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน", type="password")
+        if st.button("เข้าสู่ระบบ", use_container_width=True, type="primary"):
+            if pwd == ADMIN_PASSWORD:
+                st.session_state.auth = True; st.rerun()
+            else: st.error("❌ รหัสผ่านไม่ถูกต้องค๊า!")
+    st.stop()
+
+# ==========================================
+# 🎨 1. ตั้งค่าและดีไซน์ (Modern Premium UI)
+# ==========================================
+if 'selected_book_idx' not in st.session_state: st.session_state.selected_book_idx = None
+if 'selected_promo_idx' not in st.session_state: st.session_state.selected_promo_idx = None
 
 st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap');
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
     
-    html, body, .stApp, .main { scroll-behavior: smooth !important; }
-    
-    .stApp { 
+    html, body, [class*="css"], .stMarkdown, p, h1, h2, h3, h4, h5, h6, label, input, button { 
         font-family: 'Kanit', sans-serif !important; 
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #eff6ff 100%); 
-        color: #0f172a;
     }
     
-    /* 🚫 🔐 จุดสำคัญ: สั่งซ่อน Toolbar, Footer และปุ่มโปรไฟล์ทั้งหมด */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    [data-testid="stHeader"] {display: none !important;}
-    [data-testid="stToolbar"] {display: none !important;}
-    .stDeployButton {display:none !important;}
-    #viewer-badge {display: none !important;}
+    .stApp { background-color: #f7f9fc; }
     
-    /* ซ่อนปุ่มล่างขวา (Streamlit Profile) */
-    div[data-testid="stStatusWidget"] { display: none !important; }
-    button[title="View profile in Streamlit Community Cloud"] { display: none !important; }
-
-    /* ============ 🌟 HEADER โฉมใหม่ ============ */
-    .header-container { text-align: center; padding: 40px 20px 30px; position: relative; }
-    .header-title {
-        font-size: 4.5rem; font-weight: 800; margin: 0; padding-bottom: 10px;
-        background: linear-gradient(-45deg, #0ea5e9, #6366f1, #0284c7, #8b5cf6);
-        background-size: 300% auto; color: transparent; -webkit-background-clip: text; background-clip: text;
-        animation: shine 4s linear infinite; text-shadow: 0 10px 30px rgba(14,165,233,0.2);
+    /* แก้บั๊กฟอนต์ Sidebar โหมดมืด/สว่าง */
+    [data-testid="stSidebar"] { background-color: #ffffff; box-shadow: 4px 0 15px rgba(0,0,0,0.03); }
+    [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1e293b !important; font-weight: 600 !important; font-size: 15px !important; }
+    @media (prefers-color-scheme: dark) {
+        [data-testid="stSidebar"] { background-color: #1e293b; }
+        [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #f8fafc !important; }
     }
-    .header-subtitle { font-size: 1.2rem; color: #475569; font-weight: 500; letter-spacing: 2px; margin-top: -10px; }
-    @keyframes shine { to { background-position: 300% center; } }
     
-    .floating-gem { font-size: 2rem; position: absolute; top: 20px; animation: float 3s ease-in-out infinite; }
-    .gem-left { left: 30%; } .gem-right { right: 30%; animation-delay: 1.5s; }
-    @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-15px); } 100% { transform: translateY(0px); } }
+    div[role="radiogroup"] > label { padding: 10px 20px; background: transparent; border-radius: 12px; transition: 0.3s ease; cursor: pointer; margin-bottom: 5px; }
+    div[role="radiogroup"] > label:hover { background: rgba(108, 99, 255, 0.1); transform: translateX(5px); }
 
-    /* ============ 📚 CARD แบบ HTML LINK ============ */
-    a.card-link { text-decoration: none !important; display: block; }
+    .stButton > button { border-radius: 25px; border: none; background: linear-gradient(135deg, #6C63FF 0%, #8A84FF 100%); color: white; font-weight: 500; transition: all 0.3s ease; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(108, 99, 255, 0.35); color: white; }
     
-    .y-card { background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #bae6fd; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); margin-bottom: 15px; position: relative; box-shadow: 0 4px 10px rgba(14,165,233,0.08); cursor: pointer; }
-    .y-card:hover { transform: translateY(-8px) scale(1.02); border-color: #38bdf8; box-shadow: 0 15px 25px rgba(14,165,233,0.25); }
-    .y-img-wrapper { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; }
-    .y-img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s ease; }
-    .y-card:hover .y-img { transform: scale(1.08); } 
+    .metric-card { background: white; padding: 25px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; margin-bottom: 20px; border: 1px solid #f0f4f8; transition: 0.3s ease; }
+    @media (prefers-color-scheme: dark) { .metric-card { background: #1e293b; border-color: #334155; } }
+    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+    .metric-card h2 { color: #6C63FF; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
     
-    .y-info { padding: 8px 6px; text-align: center; background: white; position: relative; z-index: 2; border-top: 1px solid #f0f9ff; }
-    .y-name { font-size: 11px; font-weight: 600; color: #1e293b; height: 32px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height:1.4; }
+    .split-box-blue { background: linear-gradient(180deg, #e0f2fe 0%, #ffffff 100%); border: 1px solid #bae6fd; border-radius: 24px; padding: 25px; margin-bottom: 20px; height: 100%; }
+    .split-box-pink { background: linear-gradient(180deg, #fce7f3 0%, #ffffff 100%); border: 1px solid #fbcfe8; border-radius: 24px; padding: 25px; margin-bottom: 20px; height: 100%; }
+    @media (prefers-color-scheme: dark) { 
+        .split-box-blue { background: #0f172a; border-color: #0284c7; }
+        .split-box-pink { background: #0f172a; border-color: #be185d; }
+    }
     
-    /* Badges */
-    .rank-badge { position: absolute; top: 6px; left: 6px; background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); color: white; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; z-index: 5; box-shadow: 0 2px 5px rgba(0,0,0,0.2); border: 1px solid #fbbf24; }
-    .rank-badge-all { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border-color: #a78bfa; }
-    .status-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(255,255,255,0.95); color: #0284c7; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; z-index: 5; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #f0f0f0; margin-bottom: 20px; }
+    @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
+    .rank-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(108,99,255,0.15); border-color: #6C63FF; }
+    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
     
-    .section-title { color: #0369a1; font-weight: 800; margin-top: 30px; font-size: 1.6rem; display: flex; align-items: center; gap: 10px; }
-    .section-title::after { content: ''; flex: 1; height: 2px; background: linear-gradient(90deg, #bae6fd, transparent); margin-left: 15px; }
+    .ai-main { background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%); border-left: 6px solid #6C63FF; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
+    .ai-tong { background: linear-gradient(135deg, #fff0f3 0%, #ffffff 100%); border-left: 6px solid #FF6584; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
+    .ai-tao { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border-left: 6px solid #38bdf8; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
+    @media (prefers-color-scheme: dark) { 
+        .ai-main, .ai-tong, .ai-tao { background: #1e293b; }
+    }
     
-    .nav-link { flex: 1; text-align: center; padding: 12px 10px; border-radius: 20px; background: rgba(255,255,255,0.7); color: #0284c7; border: 1px solid #7dd3fc; font-weight: 600; font-size: 15px; text-decoration: none; transition: 0.3s; backdrop-filter: blur(5px); }
-    .nav-link:hover { background: #0ea5e9; color: #ffffff; transform: translateY(-3px); box-shadow: 0 8px 15px rgba(14,165,233,0.3); }
+    .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    /* Promo Page */
-    .promo-container { background: white; padding: 40px; border-radius: 30px; display: flex; gap: 40px; flex-wrap: wrap; max-width: 1050px; margin: 0 auto; border: 1px solid #e0f2fe; box-shadow: 0 20px 50px rgba(14,165,233,0.1); }
-    .promo-title { color: #0f172a; font-size: 2.5rem; margin-top: 0; font-weight: 800; line-height: 1.2; }
-    .promo-synopsis-box { background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%); padding: 25px; border-radius: 16px; border-left: 6px solid #38bdf8; margin: 25px 0; border-top: 1px solid #e0f2fe; border-right: 1px solid #e0f2fe; border-bottom: 1px solid #e0f2fe; }
-    
-    .btn-read { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: white !important; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block; transition: 0.3s; box-shadow: 0 5px 15px rgba(14,165,233,0.3); }
-    .btn-read:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 20px rgba(14,165,233,0.4); }
-    
-    .fb-link { display: inline-flex; align-items: center; background: #eff6ff; color: #1d4ed8; padding: 12px 25px; border-radius: 30px; font-weight: 600; text-decoration: none; font-size: 15px; transition: 0.3s; border: 1px solid #bfdbfe; }
-    .fb-link:hover { background: #dbeafe; transform: translateX(5px); box-shadow: 0 4px 10px rgba(29,78,216,0.1); }
-    
-    .anchor-offset { position: relative; top: -50px; visibility: hidden; }
-</style>
-""", unsafe_allow_html=True)
+def safe_image(url, img_class="rank-img"):
+    if url and str(url).strip() != "": st.markdown(f'<img src="{url}" class="{img_class}" onerror=\"this.onerror=null;this.src=\'https://via.placeholder.com/300x450?text=Error\';\">', unsafe_allow_html=True)
+    else: st.markdown(f'<img src="https://via.placeholder.com/300x450?text=No+Cover" class="{img_class}">', unsafe_allow_html=True)
 
 # ==========================================
-# 💾 2. เชื่อมต่อข้อมูล
+# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-@st.cache_data(ttl=600)
-def load_public_data():
+def upload_to_imgbb(file):
+    with st.spinner("กำลังอัปโหลดรูปภาพไปยัง ImgBB..."):
+        try:
+            res = requests.post("https://api.imgbb.com/1/upload", data={"key": IMGBB_API_KEY}, files={"image": file.getvalue()})
+            if res.status_code == 200: return res.json()["data"]["url"]
+            else: st.error("เกิดข้อผิดพลาดจาก ImgBB"); return None
+        except Exception as e: st.error(f"Upload Failed: {e}"); return None
+
+@st.cache_data(ttl=300)
+def load_admin_data():
     try:
         df_b = conn.read(worksheet="Books", ttl=0)
-        df_f = conn.read(worksheet="Finance", ttl=0)
         books = df_b.to_dict('records')
         for b in books:
-            try: b['ลิงก์อ่าน'] = json.loads(b.get('ลิงก์อ่าน', '[]')) if pd.notna(b.get('ลิงก์อ่าน')) else []
+            def clean_str(val):
+                return str(val) if pd.notna(val) and str(val).lower() != 'nan' else ''
+            
+            b['ภาพปก'] = clean_str(b.get('ภาพปก'))
+            b['เรื่องย่อ'] = clean_str(b.get('เรื่องย่อ'))
+            b['หมายเหตุ'] = clean_str(b.get('หมายเหตุ'))
+            
+            try: 
+                l_read = b.get('ลิงก์อ่าน')
+                b['ลิงก์อ่าน'] = json.loads(l_read) if pd.notna(l_read) and str(l_read).strip() not in ['', 'nan'] else []
             except: b['ลิงก์อ่าน'] = []
-            b['เรื่องย่อ'] = str(b.get('เรื่องย่อ', '')).replace('\n', '<br>') if pd.notna(b.get('เรื่องย่อ')) and str(b.get('เรื่องย่อ')).lower() != 'nan' else 'รอติดตามความสนุกเร็วๆ นี้ค๊า!'
+            if not isinstance(b['ลิงก์อ่าน'], list): b['ลิงก์อ่าน'] = []
+            
+            try: 
+                l_orig = b.get('ลิงก์ต้นฉบับ')
+                b['ลิงก์ต้นฉบับ'] = json.loads(l_orig) if pd.notna(l_orig) and str(l_orig).strip() not in ['', 'nan'] else []
+            except: b['ลิงก์ต้นฉบับ'] = []
+            if not isinstance(b['ลิงก์ต้นฉบับ'], list): b['ลิงก์ต้นฉบับ'] = []
+            
+            b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
+            b['หมวดหมู่'] = b.get('หมวดหมู่', 'ทั่วไป')
+            b['QC'] = b.get('QC', 'ตอง')
             b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
+            b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
+
+        return books
+    except: return []
+
+@st.cache_data(ttl=300)
+def load_finance_data():
+    try: return conn.read(worksheet="Finance", ttl=0)
+    except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
+
+@st.cache_data(ttl=300)
+def load_settings():
+    try:
+        df_s = conn.read(worksheet="Settings", ttl=0)
+        return {"categories": df_s['categories'].dropna().tolist(), "platforms": df_s['platforms'].dropna().tolist()}
+    except:
+        return {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
+
+# 📢 ฟังก์ชันดึงข้อมูลประกาศ (ใหม่!)
+@st.cache_data(ttl=300)
+def load_announcements():
+    try: return conn.read(worksheet="Announcements", ttl=0)
+    except: return pd.DataFrame(columns=['วันที่', 'หัวข้อประกาศ', 'เนื้อหา', 'สถานะ'])
+
+if 'books_data' not in st.session_state: st.session_state.books_data = load_admin_data()
+if 'finance_db' not in st.session_state: st.session_state.finance_db = load_finance_data()
+if 'app_settings' not in st.session_state: st.session_state.app_settings = load_settings()
+if 'announcements_db' not in st.session_state: st.session_state.announcements_db = load_announcements()
+
+def save_all():
+    try:
+        books_to_save = []
+        for b in st.session_state.books_data:
+            temp = b.copy()
+            if '_orig_idx' in temp: del temp['_orig_idx']
+            temp['ลิงก์อ่าน'] = json.dumps(b.get('ลิงก์อ่าน', []))
+            temp['ลิงก์ต้นฉบับ'] = json.dumps(b.get('ลิงก์ต้นฉบับ', []))
+            books_to_save.append(temp)
         
-        df_f['ยอดสุทธิ'] = pd.to_numeric(df_f['ยอดสุทธิ'], errors='coerce').fillna(0)
-        df_f['วันที่'] = pd.to_datetime(df_f['วันที่'], errors='coerce')
-        df_f['เดือน-ปี'] = df_f['วันที่'].dt.strftime('%Y-%m')
+        df_save = pd.DataFrame(books_to_save)
+        if df_save.empty: df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
         
-        return books, df_f
-    except: return [], pd.DataFrame()
-
-books_data, finance_df = load_public_data()
-
-# ตรวจจับการคลิกรูปจาก URL
-if "book" in st.query_params:
-    target_book = st.query_params["book"]
-    found = [i for i, b in enumerate(books_data) if b['ชื่อเรื่อง'] == target_book]
-    if found: st.session_state.view_idx = found[0]
-    st.query_params.clear()
-
-# หาเดือนที่แล้ว
-today = datetime.now()
-first_day_this_month = today.replace(day=1)
-last_month_date = first_day_this_month - pd.Timedelta(days=1)
-last_month_str = last_month_date.strftime('%Y-%m')
+        conn.update(worksheet="Books", data=df_save)
+        conn.update(worksheet="Finance", data=st.session_state.finance_db)
+        
+        set_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
+        conn.update(worksheet="Settings", data=set_df)
+        
+        # 📢 บันทึกข้อมูลประกาศลง Sheets
+        conn.update(worksheet="Announcements", data=st.session_state.announcements_db)
+        
+        st.cache_data.clear()
+        st.toast("✅ บันทึกข้อมูลเรียบร้อย!")
+    except Exception as e: st.error(f"Error saving: {e}")
 
 # ==========================================
-# 🏠 ส่วนแสดงผล
+# 📱 3. ระบบนำทาง (Sidebar)
 # ==========================================
-if st.session_state.view_idx is None:
+st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
+menu = st.sidebar.radio("Navigation Menu", [
+    "📊 Dashboard", 
+    "📚 คลังนิยาย", 
+    "⚡ แก้ไขด่วน (Quick Edit)", 
+    "📢 แนะนำนิยาย", 
+    "📰 จัดการประกาศ",  # <--- เมนูใหม่ค๊า!
+    "💰 บัญชีรายรับ", 
+    "💸 สรุปส่วนแบ่ง (QC)", 
+    "🏆 อันดับนิยายขายดี", 
+    "⚙️ ตั้งค่าระบบ"
+])
+
+if menu != "📚 คลังนิยาย": st.session_state.selected_book_idx = None
+if menu != "📢 แนะนำนิยาย": st.session_state.selected_promo_idx = None
+
+# ------------------------------------------
+# 📊 หน้า 1: Dashboard
+# ------------------------------------------
+if menu == "📊 Dashboard":
+    st.title("📊 ภาพรวมระบบ (Dashboard)")
+    if st.button("🔄 ดึงข้อมูลล่าสุด (Clear Cache & Reload)", type="primary"): st.cache_data.clear(); st.rerun()
     
-    # --- 🌟 HEADER ---
-    st.markdown("""
-    <div class="header-container">
-        <div class="floating-gem gem-left">✨</div>
-        <h1 class="header-title">Nok-kaew Library</h1>
-        <p class="header-subtitle">คลังแสงนิยายแปลและมังฮวาสุดพรีเมียม</p>
-        <div class="floating-gem gem-right">💎</div>
-    </div>
-    """, unsafe_allow_html=True)
+    total_books = len(st.session_state.books_data)
+    active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
+    finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
     
-    c_search1, c_search2, c_search3 = st.columns([1, 2, 1])
-    search_query = c_search2.text_input("🔍", placeholder="พิมพ์ชื่อนิยายเพื่อค้นหา...", label_visibility="collapsed")
+    df_finance = st.session_state.finance_db.copy()
+    total_revenue = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').sum() if not df_finance.empty else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books}</h2></div>", unsafe_allow_html=True)
+    with col2: st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books}</h2></div>", unsafe_allow_html=True)
+    with col3: st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books}</h2></div>", unsafe_allow_html=True)
+    with col4: st.markdown(f"<div class='metric-card'><h3>💰 รายได้สุทธิรวม</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.title("🤖 AI Executive Report (รายงานเจาะลึก)")
     
-    navbar_html = """
-    <div style="display: flex; gap: 12px; margin: 30px auto 40px; justify-content: center; max-width: 900px; flex-wrap: wrap;">
-        <a href="#latest-updates" class="nav-link">🆕 อัปเดตล่าสุด</a>
-        <a href="#top-month" class="nav-link">🔥 ขายดีประจำเดือนที่แล้ว</a>
-        <a href="#top-alltime" class="nav-link">🏆 ขายดีตลอดกาล</a>
-        <a href="#full-library" class="nav-link">📚 คลังนิยายทั้งหมด</a>
-    </div>
-    """
-    st.markdown(navbar_html, unsafe_allow_html=True)
+    if not df_finance.empty and st.session_state.books_data:
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'หมวดหมู่', 'ตอนปัจจุบัน', 'เป้าหมาย', 'สถานะ']]
+        df_merge = pd.merge(df_finance, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        
+        top_cat = df_merge.groupby('หมวดหมู่')['ยอดสุทธิ'].sum().idxmax() if 'หมวดหมู่' in df_merge else "ไม่มีข้อมูล"
+        top_book = df_merge.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+        near_finish = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต' and (int(b.get('ตอนปัจจุบัน',0))/max(int(b.get('เป้าหมาย',1)),1)) >= 0.8]
+        
+        main_insight = f"<div class='ai-main'><h4 style='color:#6C63FF; margin-bottom:10px;'>🌟 ภาพรวมและทิศทางอนาคต (Overall Trends)</h4><p><b>นิยายชูโรงของเรา:</b> ตอนนี้เรื่อง <b>\"{top_book}\"</b> ยืนหนึ่งเรื่องการสร้างรายได้ครับ ในขณะที่หมวดหมู่ที่นักอ่านเปย์หนักที่สุดตกเป็นของ <b>\"{top_cat}\"</b></p><p><b>💡 AI ขอแนะนำ:</b> ในการซื้อลิขสิทธิ์เรื่องต่อไป แนะนำให้เล็งหมวด <b>\"{top_cat}\"</b> เพิ่มเติมครับ</p>"
+        if near_finish: main_insight += f"<p><b>🚀 โอกาสทอง:</b> มีนิยายที่แปลไปแล้วเกิน 80% คือ <b>{', '.join(near_finish)}</b> เตรียมจัดแพ็กเกจ E-Book ได้เลย!</p>"
+        main_insight += "</div>"
+        st.markdown(main_insight.replace('\n', ''), unsafe_allow_html=True)
+        
+        col_qc1, col_qc2 = st.columns(2)
+        with col_qc1:
+            df_tong = df_merge[df_merge['QC'] == 'ตอง']
+            if not df_tong.empty and df_tong['ยอดสุทธิ'].sum() > 0:
+                tong_top = df_tong.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                st.markdown(f"<div class='ai-tong'><h4 style='color:#FF6584; margin-bottom:10px;'>💖 ผลงานของ ตอง (Tong)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{df_tong['ยอดสุทธิ'].sum():,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tong_top}\"</b> ทำยอดทะลุเป้าได้อย่างสวยงามครับ</p></div>".replace('\n', ''), unsafe_allow_html=True)
+            else: st.markdown("<div class='ai-tong'><h4>💖 ตอง (Tong)</h4><p>กำลังรอสร้างผลงานยอดขายแรกอยู่ครับ!</p></div>", unsafe_allow_html=True)
+                
+        with col_qc2:
+            df_tao = df_merge[df_merge['QC'] == 'ตาว']
+            if not df_tao.empty and df_tao['ยอดสุทธิ'].sum() > 0:
+                tao_top = df_tao.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().idxmax()
+                st.markdown(f"<div class='ai-tao'><h4 style='color:#38bdf8; margin-bottom:10px;'>💙 ผลงานของ ตาว (Tao)</h4><p><b>ยอดเงินที่ทำได้รวม:</b> ฿{df_tao['ยอดสุทธิ'].sum():,.0f}</p><p><b>ลูกรักทำเงิน:</b> เรื่อง <b>\"{tao_top}\"</b> คือตัวท็อปในมือตาวตอนนี้เลยครับ</p></div>".replace('\n', ''), unsafe_allow_html=True)
+            else: st.markdown("<div class='ai-tao'><h4>💙 ตาว (Tao)</h4><p>รอเปิดตัวยอดขายสุดปังอยู่ครับ!</p></div>", unsafe_allow_html=True)
 
-    filtered_books = [b for b in books_data if search_query.lower() in b['ชื่อเรื่อง'].lower()]
+    st.markdown("---")
+    st.subheader("📈 กราฟสรุปภาพรวม")
+    c_c1, c_c2 = st.columns(2)
+    with c_c1:
+        if total_books > 0:
+            fig_cat = px.pie(pd.DataFrame(st.session_state.books_data), names='หมวดหมู่', title='สัดส่วนนิยายแยกตามหมวดหมู่', hole=0.45, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_cat.update_layout(font_family="Kanit")
+            st.plotly_chart(fig_cat, use_container_width=True)
+    with c_c2:
+        if not df_finance.empty and total_revenue > 0:
+            fig_plat = px.bar(df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().reset_index(), x='แพลตฟอร์ม', y='ยอดสุทธิ', title='รายได้สุทธิแยกตามแพลตฟอร์ม', text_auto='.2s', color='แพลตฟอร์ม', color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_plat.update_layout(font_family="Kanit", showlegend=False)
+            st.plotly_chart(fig_plat, use_container_width=True)
 
-    if filtered_books:
-        # --- 🆕 อัปเดตล่าสุด ---
-        st.markdown("<div id='latest-updates' class='anchor-offset'></div><h3 class='section-title'>🆕 นิยายอัปเดตล่าสุด</h3>", unsafe_allow_html=True)
-        latest_books = filtered_books[::-1][:10]
-        cols = st.columns(10)
-        for i, b in enumerate(latest_books):
-            with cols[i]:
-                img = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450/e0f2fe/0284c7?text=No+Cover"
-                card = f"<a href='/?book={urllib.parse.quote(b['ชื่อเรื่อง'])}' target='_self' class='card-link'><div class='y-card'><div class='y-img-wrapper'><div class='status-badge'>ตอน {b.get('ตอนปัจจุบัน',0)}</div><img src='{img}' class='y-img'></div><div class='y-info'><div class='y-name'>{b['ชื่อเรื่อง']}</div></div></div></a>"
-                st.markdown(card.replace('\n', ''), unsafe_allow_html=True)
+# ------------------------------------------
+# 📚 หน้า 2: คลังนิยาย
+# ------------------------------------------
+elif menu == "📚 คลังนิยาย":
+    # 📌 โหมดแก้ไขนิยายเดี่ยว
+    if st.session_state.selected_book_idx is not None:
+        idx = st.session_state.selected_book_idx
+        b = st.session_state.books_data[idx]
+        
+        c_back, _ = st.columns([1, 5])
+        if c_back.button("🔙 กลับหน้าคลังนิยาย"): st.session_state.selected_book_idx = None; st.rerun()
+            
+        st.title(f"🛠️ จัดการ: {b['ชื่อเรื่อง']}")
+        st.markdown("---")
+        
+        c_img, c_form = st.columns([1, 3])
+        with c_img: 
+            safe_image(b.get('ภาพปก'))
+            st.markdown("##### 📤 อัปโหลดปกใหม่")
+            uploaded_file = st.file_uploader("เลือกรูปจากเครื่อง (อัปโหลดเข้า ImgBB อัตโนมัติ)", type=["jpg", "jpeg", "png"])
+            if uploaded_file is not None:
+                if st.button("🚀 ยืนยันอัปโหลด", use_container_width=True):
+                    new_url = upload_to_imgbb(uploaded_file)
+                    if new_url:
+                        st.session_state.books_data[idx]['ภาพปก'] = new_url
+                        save_all(); st.rerun()
+            
+        with c_form:
+            e_title = st.text_input("ชื่อเรื่อง", value=b['ชื่อเรื่อง'])
+            
+            c_f1, c_f2 = st.columns(2)
+            e_cat = c_f1.selectbox("หมวดหมู่", st.session_state.app_settings['categories'], index=st.session_state.app_settings['categories'].index(b.get('หมวดหมู่','ทั่วไป')) if b.get('หมวดหมู่') in st.session_state.app_settings['categories'] else 0)
+            e_stat = c_f2.selectbox("สถานะ", ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], index=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"].index(b.get('สถานะ','กำลังอัปเดต')) if b.get('สถานะ') in ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"] else 0)
+            
+            c_f3, c_f4, c_f5 = st.columns(3)
+            e_qc = c_f3.radio("QC", ["ตอง", "ตาว"], index=["ตอง", "ตาว"].index(b.get('QC','ตอง')) if b.get('QC') in ["ตอง", "ตาว"] else 0, horizontal=True)
+            e_tgt = c_f4.number_input("จำนวนตอนต้นฉบับ", value=int(b.get('เป้าหมาย',1)))
+            e_curr = c_f5.number_input("แปลเสร็จแล้ว (ตอน)", value=int(b.get('ตอนปัจจุบัน',0)))
+            
+            e_cover = st.text_input("ลิงก์ภาพปก (อัปเดตเองเมื่ออัปโหลดรูปทางซ้าย)", value=b.get('ภาพปก',''))
+            e_synopsis = st.text_area("📔 เรื่องย่อ", value=b.get('เรื่องย่อ',''), height=150)
+            e_note = st.text_area("📝 หมายเหตุ (Note)", value=b.get('หมายเหตุ',''))
+            
+            l1, l2 = st.columns(2)
+            with l1:
+                st.write("**📖 ลิงก์ช่องทางอ่าน (แสดงผลหน้า Public)**")
+                read_data = b.get('ลิงก์อ่าน', [])
+                if not isinstance(read_data, list) or len(read_data) == 0:
+                    read_data = [{"note":"ReadToon", "url":""}]
+                df_read = pd.DataFrame(read_data)
+                
+                edited_read = st.data_editor(
+                    df_read, 
+                    num_rows="dynamic", 
+                    use_container_width=True, 
+                    key=f"edit_read_{idx}",
+                    column_config={
+                        "note": st.column_config.SelectboxColumn("แพลตฟอร์ม", options=st.session_state.app_settings['platforms'], required=True),
+                        "url": st.column_config.LinkColumn("ลิงก์ URL", required=True)
+                    }
+                )
+            with l2:
+                st.write("**🇰🇷 ลิงก์ต้นฉบับ**")
+                orig_data = b.get('ลิงก์ต้นฉบับ', [])
+                if not isinstance(orig_data, list) or len(orig_data) == 0:
+                    orig_data = [{"url":"", "note":""}]
+                df_orig = pd.DataFrame(orig_data)
+                edited_orig = st.data_editor(df_orig, num_rows="dynamic", use_container_width=True, key=f"edit_orig_{idx}")
 
-        # --- 🔥 อันดับขายดีเดือนที่แล้ว ---
-        st.markdown("<div id='top-month' class='anchor-offset'></div><h3 class='section-title'>🔥 10 อันดับขายดี ประจำเดือน " + last_month_str + "</h3>", unsafe_allow_html=True)
-        df_month = finance_df[finance_df['เดือน-ปี'] == last_month_str]
-        if not df_month.empty:
-            top_month = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).index.tolist()
-            display_top_m = [b for title in top_month for b in filtered_books if b['ชื่อเรื่อง'] == title][:10]
-            cols_top_m = st.columns(10)
-            for i, b in enumerate(display_top_m):
-                with cols_top_m[i]:
-                    img = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450/e0f2fe/0284c7?text=No+Cover"
-                    card = f"<a href='/?book={urllib.parse.quote(b['ชื่อเรื่อง'])}' target='_self' class='card-link'><div class='y-card'><div class='y-img-wrapper'><div class='rank-badge'>Top {i+1}</div><img src='{img}' class='y-img'></div><div class='y-info'><div class='y-name'>{b['ชื่อเรื่อง']}</div></div></div></a>"
-                    st.markdown(card.replace('\n', ''), unsafe_allow_html=True)
+            sv_col, del_col = st.columns(2)
+            if sv_col.button("💾 บันทึกการเปลี่ยนแปลง", type="primary", use_container_width=True):
+                st.session_state.books_data[idx].update({
+                    'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover, 
+                    'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt, 'เรื่องย่อ': e_synopsis, 'หมายเหตุ': e_note, 
+                    'ลิงก์อ่าน': [r for r in edited_read.to_dict('records') if r.get('url')], 
+                    'ลิงก์ต้นฉบับ': [r for r in edited_orig.to_dict('records') if r.get('url')]
+                })
+                save_all()
+                st.session_state.selected_book_idx = None; st.rerun()
+            
+            st.markdown("<div class='btn-delete'>", unsafe_allow_html=True)
+            if del_col.button("🗑️ ลบนิยายเรื่องนี้ทิ้ง", use_container_width=True):
+                st.session_state.books_data.pop(idx)
+                save_all()
+                st.session_state.selected_book_idx = None; st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- 🏆 ขายดีตลอดกาล ---
-        st.markdown("<div id='top-alltime' class='anchor-offset'></div><h3 class='section-title'>🏆 10 อันดับขายดี ตลอดกาล</h3>", unsafe_allow_html=True)
-        if not finance_df.empty:
-            top_all = finance_df.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().sort_values(ascending=False).index.tolist()
-            display_top_a = [b for title in top_all for b in filtered_books if b['ชื่อเรื่อง'] == title][:10]
-            cols_top_a = st.columns(10)
-            for i, b in enumerate(display_top_a):
-                with cols_top_a[i]:
-                    img = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450/e0f2fe/0284c7?text=No+Cover"
-                    card = f"<a href='/?book={urllib.parse.quote(b['ชื่อเรื่อง'])}' target='_self' class='card-link'><div class='y-card'><div class='y-img-wrapper'><div class='rank-badge rank-badge-all'>#{i+1}</div><img src='{img}' class='y-img'></div><div class='y-info'><div class='y-name'>{b['ชื่อเรื่อง']}</div></div></div></a>"
-                    st.markdown(card.replace('\n', ''), unsafe_allow_html=True)
+    # 📌 โหมดแกลลอรี่
+    else:
+        st.title("📚 จัดการคลังนิยาย")
+        
+        with st.expander("✨ เพิ่มนิยายเรื่องใหม่ (คลิกเพื่อกางออก)"):
+            with st.form("add_book_form"):
+                c_new1, c_new2 = st.columns(2)
+                new_title = c_new1.text_input("ชื่อเรื่องนิยาย")
+                new_cat = c_new1.selectbox("หมวดหมู่", st.session_state.app_settings['categories'])
+                new_cover = c_new2.text_input("ลิงก์รูปปก (หรือไปอัปโหลดเอาทีหลังได้)")
+                new_qc = c_new2.radio("ผู้ดูแล (QC)", ["ตอง", "ตาว"], horizontal=True)
+                c_chap1, c_chap2 = st.columns(2)
+                new_target = c_chap1.number_input("จำนวนตอนต้นฉบับ", min_value=1, value=100)
+                new_current = c_chap2.number_input("ตอนที่แปลเสร็จแล้ว", min_value=0, value=0)
+                if st.form_submit_button("บันทึกนิยายเรื่องใหม่"):
+                    if new_title:
+                        st.session_state.books_data.append({'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 'ตอนปัจจุบัน': new_current, 'เป้าหมาย': new_target, 'ภาพปก': new_cover, 'เรื่องย่อ': '', 'หมายเหตุ': '', 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []})
+                        save_all(); st.rerun()
 
-        # --- 📚 คลังนิยายทั้งหมด ---
-        st.markdown("<div id='full-library' class='anchor-offset'></div><h3 class='section-title'>📚 คลังนิยายทั้งหมด</h3>", unsafe_allow_html=True)
-        for i in range(0, len(filtered_books), 10):
-            cols = st.columns(10)
+        st.markdown("---")
+        f_col1, f_col2, f_col3 = st.columns(3)
+        search_q = f_col1.text_input("🔍 ค้นหาชื่อเรื่อง...")
+        filter_cat = f_col2.selectbox("📂 หมวดหมู่", ["ทั้งหมด"] + st.session_state.app_settings['categories'])
+        filter_stat = f_col3.selectbox("📌 สถานะ", ["ทั้งหมด", "กำลังอัปเดต", "จบแล้ว", "พักการแปล"])
+
+        filtered_books = []
+        for idx, b in enumerate(st.session_state.books_data):
+            if search_q and search_q.lower() not in b['ชื่อเรื่อง'].lower(): continue
+            if filter_cat != "ทั้งหมด" and b['หมวดหมู่'] != filter_cat: continue
+            if filter_stat != "ทั้งหมด" and b.get('สถานะ') != filter_stat: continue
+            b['_orig_idx'] = idx 
+            filtered_books.append(b)
+
+        for i in range(0, len(filtered_books), 6):
+            cols = st.columns(6)
             for j, col in enumerate(cols):
                 if i + j < len(filtered_books):
                     b = filtered_books[i+j]
                     with col:
-                        img = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450/e0f2fe/0284c7?text=No+Cover"
-                        card = f"<a href='/?book={urllib.parse.quote(b['ชื่อเรื่อง'])}' target='_self' class='card-link'><div class='y-card'><div class='y-img-wrapper'><div class='status-badge'>{b.get('สถานะ','')}</div><img src='{img}' class='y-img'></div><div class='y-info'><div class='y-name'>{b['ชื่อเรื่อง']}</div></div></div></a>"
-                        st.markdown(card.replace('\n', ''), unsafe_allow_html=True)
+                        img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
+                        card = f"<div class='rank-card'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"><div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div>"
+                        stat_color = "#28a745" if b.get('สถานะ') == 'จบแล้ว' else ("#ffc107" if b.get('สถานะ') == 'พักการแปล' else "#17a2b8")
+                        card += f"<span style='color:{stat_color}; font-size:12px; font-weight:600;'>● {b.get('สถานะ')}</span><br><br></div>"
+                        st.markdown(card.replace('\n',''), unsafe_allow_html=True)
+                        
+                        if st.button("✏️ จัดการ", key=f"edit_{b['_orig_idx']}", use_container_width=True):
+                            st.session_state.selected_book_idx = b['_orig_idx']; st.rerun()
 
-# --- 📢 รายละเอียดนิยาย ---
-else:
-    b = books_data[st.session_state.view_idx]
-    if st.button("🔙 กลับไปคลังนิยาย", type="primary"): st.session_state.view_idx = None; st.rerun()
-    st.markdown("<br>", unsafe_allow_html=True)
+# ------------------------------------------
+# ⚡ หน้า 3: แก้ไขด่วน (Quick Edit)
+# ------------------------------------------
+elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
+    st.title("⚡ ระบบแก้ไขด่วนแบบตาราง")
+    st.info("💡 แก้ไขข้อมูลในตารางได้อิสระ แล้วกดปุ่ม 'บันทึกการเปลี่ยนแปลงทั้งหมด' ด้านล่างเพื่ออัปเดตพร้อมกัน")
+    if not st.session_state.books_data: st.warning("ไม่มีข้อมูลนิยาย")
+    else:
+        df_quick = pd.DataFrame(st.session_state.books_data)
+        edit_cols = ['ชื่อเรื่อง', 'หมวดหมู่', 'สถานะ', 'QC', 'ตอนปัจจุบัน', 'เป้าหมาย']
+        edited_df = st.data_editor(
+            df_quick[edit_cols],
+            column_config={
+                "หมวดหมู่": st.column_config.SelectboxColumn("หมวดหมู่", options=st.session_state.app_settings['categories'], required=True),
+                "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True),
+                "QC": st.column_config.SelectboxColumn("ผู้ดูแล (QC)", options=["ตอง", "ตาว"], required=True),
+                "ตอนปัจจุบัน": st.column_config.NumberColumn("แปลแล้ว (ตอน)", min_value=0),
+                "เป้าหมาย": st.column_config.NumberColumn("ต้นฉบับ (ตอน)", min_value=1)
+            }, use_container_width=True, num_rows="fixed", height=500
+        )
+        if st.button("💾 บันทึกการเปลี่ยนแปลงทั้งหมด", type="primary"):
+            for i in range(len(edited_df)):
+                for col in edit_cols: st.session_state.books_data[i][col] = edited_df.iloc[i][col]
+            save_all(); st.rerun()
+
+# ------------------------------------------
+# 📢 หน้า 4: แนะนำนิยาย (Promo Page)
+# ------------------------------------------
+elif menu == "📢 แนะนำนิยาย":
+    if st.session_state.selected_promo_idx is not None:
+        idx = st.session_state.selected_promo_idx
+        b = st.session_state.books_data[idx]
+        
+        if st.button("🔙 กลับหน้าหลัก"): st.session_state.selected_promo_idx = None; st.rerun()
+        
+        img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
+        synopsis = str(b.get('เรื่องย่อ', '')).replace('\n', '<br>')
+        
+        links_html = ""
+        for link in b.get('ลิงก์อ่าน', []):
+            if link.get('url'):
+                links_html += f"<span style='display:inline-block; background: linear-gradient(135deg, #6C63FF 0%, #8A84FF 100%); color:white; padding:8px 20px; border-radius:25px; text-decoration:none; font-weight:600; margin-right:10px; box-shadow: 0 4px 10px rgba(108,99,255,0.2);'>📖 {link.get('note','อ่านเลย')}</span>"
+
+        promo_html = f"""
+        <div style="background: #ffffff; padding: 50px; border-radius: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.06); border: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; max-width: 1000px; margin: 0 auto;">
+            <div style="flex: 0 0 320px;">
+                <img src="{img_url}" style="width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.15);" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';">
+            </div>
+            <div style="flex: 1; min-width: 300px;">
+                <div style="color: #6C63FF; font-weight: 700; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;">Nok-kaew Translation</div>
+                <h1 style="color: #1e293b; font-size: 2.4rem; font-weight: 700; margin-top: 0; margin-bottom: 20px; line-height: 1.3;">{b['ชื่อเรื่อง']}</h1>
+                
+                <div style="margin-bottom: 30px; display: flex; gap: 15px; flex-wrap: wrap;">
+                    <div style="background: #e0f2fe; color: #0284c7; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px;">📌 สถานะ: {b.get('สถานะ','')}</div>
+                    <div style="background: #f3e8ff; color: #7e22ce; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px;">📑 {b.get('ตอนปัจจุบัน',0)} / {b.get('เป้าหมาย',0)} ตอน</div>
+                    <div style="background: #ffedd5; color: #be185d; padding: 6px 18px; border-radius: 20px; font-weight: 600; font-size: 14px;">📂 {b.get('หมวดหมู่','')}</div>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 25px; border-radius: 20px; border-left: 6px solid #6C63FF;">
+                    <h3 style="color: #475569; margin-top: 0; margin-bottom: 15px; font-size: 1.2rem; font-weight: 600;">📝 เรื่องย่อ</h3>
+                    <p style="color: #334155; font-size: 1.05rem; line-height: 1.8; margin-bottom: 0;">{synopsis}</p>
+                </div>
+                
+                <div style="margin-top: 35px;">
+                    <h4 style="color: #64748b; margin-bottom: 15px; font-size: 1rem; font-weight: 500;">ติดตามผู้แปลได้ที่:</h4>
+                    {links_html}
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(promo_html.replace('\n', ''), unsafe_allow_html=True)
+        st.info("📸 **Tip:** เลื่อนจัดหน้าจอให้สวยงาม แล้วแคปเจอร์เพื่อนำไปโพสต์ได้เลยครับ!")
+
+    else:
+        st.title("📢 สร้างภาพโปรโมทนิยาย")
+        st.write("เลือกนิยายที่ต้องการ เพื่อสร้างภาพพร้อมเรื่องย่อสำหรับแคปหน้าจอไปโปรโมท")
+        st.markdown("---")
+        
+        for i in range(0, len(st.session_state.books_data), 6):
+            cols = st.columns(6)
+            for j, col in enumerate(cols):
+                if i + j < len(st.session_state.books_data):
+                    b = st.session_state.books_data[i+j]
+                    with col:
+                        img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450?text=No+Cover"
+                        card = f"<div class='rank-card'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450?text=Error';\"><div style='font-size:13px; font-weight:600; line-height:1.2; margin-bottom:10px; height:32px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
+                        st.markdown(card.replace('\n', ''), unsafe_allow_html=True)
+                        if st.button("👁️ สร้างภาพ", key=f"promo_{i+j}", use_container_width=True):
+                            st.session_state.selected_promo_idx = i+j; st.rerun()
+
+# ------------------------------------------
+# 📰 หน้า 5: จัดการประกาศ (หน้าใหม่ล่าสุด!)
+# ------------------------------------------
+elif menu == "📰 จัดการประกาศ":
+    st.title("📰 จัดการประกาศ (Announcements)")
+    st.info("💡 เพิ่ม ลบ หรือแก้ไขประกาศที่จะไปแสดงผลที่หน้าเว็บสาธารณะ (สร้างอัตโนมัติลงชีต 'Announcements')")
     
-    links_html = "".join([f"<a href='{l['url']}' target='_blank' class='btn-read' style='margin-right:12px; margin-bottom:12px;'>📖 อ่านที่ {l['note']}</a>" for l in b['ลิงก์อ่าน'] if l.get('url')])
-    
-    html = f"""<div class='promo-container'><div style='flex:0 0 280px;'><img src='{b.get('ภาพปก')}' style='width:100%; border-radius:18px; box-shadow:0 15px 35px rgba(14,165,233,0.15);'></div><div style='flex:1; min-width:300px;'><div style='color: #0ea5e9; font-weight: 700; margin-bottom: 5px; font-size: 13px;'>💎 NOK-KAEW TRANSLATION</div><h1 class='promo-title'>{b['ชื่อเรื่อง']}</h1><div style='display:flex; gap:10px; margin-bottom:25px; flex-wrap:wrap;'><span style='background:#dcfce7; color:#166534; padding:6px 15px; border-radius:20px; font-size:13px; font-weight:600;'>สถานะ: {b.get('สถานะ','')}</span><span style='background:#e0f2fe; color:#0369a1; padding:6px 15px; border-radius:20px; font-size:13px; font-weight:600;'>ตอนที่ {b.get('ตอนปัจจุบัน',0)}</span><span style='background:#fef3c7; color:#b45309; padding:6px 15px; border-radius:20px; font-size:13px; font-weight:600;'>หมวด: {b.get('หมวดหมู่','')}</span></div><div class='promo-synopsis-box'><h3 style='color:#0284c7; margin-top:0; font-size:1.3rem;'>✨ เรื่องย่อ</h3><p class='promo-synopsis-text'>{b['เรื่องย่อ']}</p></div><div style='margin-top:30px;'><h4 style='color:#475569; font-size:16px; margin-bottom:15px;'>พุ่งตัวไปอ่านได้ที่:</h4><div style='display:flex; flex-wrap:wrap;'>{links_html}</div></div><div style='margin-top:40px; border-top:2px dashed #e2e8f0; padding-top:25px;'><a href='https://www.facebook.com/people/%E0%B8%99%E0%B8%81%E0%B9%81%E0%B8%81%E0%B9%89%E0%B8%A7%E0%B8%AD%E0%B8%B9%E0%B9%89%E0%B8%87%E0%B8%B2%E0%B8%99/61582115332999/' target='_blank' class='fb-link'>ติดตามข่าวสารที่: เพจนกแก้วอู้งาน</a></div></div></div>"""
-    st.markdown(html.replace('\n',''), unsafe_allow_html=True)
-    
-    # ระบบป้ายยา
-    st.markdown("<br><hr style='border-color:#bae6fd;'><h3 style='color:#0369a1; text-align:center; margin-bottom:30px;'>💖 เรื่องที่คุณน่าจะชอบ</h3>", unsafe_allow_html=True)
-    other_books = [book for book in books_data if book['ชื่อเรื่อง'] != b['ชื่อเรื่อง']]
-    if len(other_books) >= 2:
-        recommended = random.Random(b['ชื่อเรื่อง']).sample(other_books, 2)
-        _, c_rec1, c_rec2, _ = st.columns([3, 2, 2, 3])
-        for i, rec_b in enumerate(recommended):
-            with (c_rec1 if i == 0 else c_rec2):
-                img = rec_b.get('ภาพปก') if rec_b.get('ภาพปก') else "https://via.placeholder.com/300x450"
-                st.markdown(f"<a href='/?book={urllib.parse.quote(rec_b['ชื่อเรื่อง'])}' target='_self' class='card-link'><div class='y-card' style='max-width:200px; margin:0 auto;'><div class='y-img-wrapper'><img src='{img}' class='y-img'></div><div class='y-info'><div class='y-name'>{rec_b['ชื่อเรื่อง']}</div></div></div></a>", unsafe_allow_html=True)
+    with st.form("add_announcement_form"):
+        c1, c2 = st.columns([1, 3])
+        a_date = c1.date_input("วันที่ประกาศ", value=datetime.today())
+        a_status = c1.selectbox("สถานะ", ["แสดง", "ซ่อน"])
+        a_title = c2.text_input("หัวข้อประกาศ (จำเป็นต้องใส่)")
+        a_content = st.text_area("รายละเอียดประกาศ")
+        
+        if st.form_submit_button("➕ เพิ่มประกาศใหม่", type="primary"):
+            if a_title:
+                new_announce = pd.DataFrame([{
+                    'วันที่': a_date.strftime("%Y-%m-%d"), 
+                    'หัวข้อประกาศ': a_title, 
+                    'เนื้อหา': a_content, 
+                    'สถานะ': a_status
+                }])
+                st.session_state.announcements_db = pd.concat([st.session_state.announcements_db, new_announce], ignore_index=True)
+                save_all()
+                st.rerun()
+            else:
+                st.warning("⚠️ กรุณาใส่หัวข้อประกาศก่อนบันทึกครับ")
+                
+    st.markdown("#### ✏️ ตารางแก้ไขและลบประกาศ")
+    if st.session_state.announcements_db.empty:
+        st.write("ยังไม่มีข้อมูลประกาศในระบบค๊า")
+    else:
+        edited_announce = st.data_editor(
+            st.session_state.announcements_db, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            column_config={
+                "วันที่": st.column_config.DateColumn("วันที่", format="YYYY-MM-DD"),
+                "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["แสดง", "ซ่อน"], required=True)
+            }
+        )
+        if st.button("💾 บันทึกการแก้ไขตารางประกาศ", type="primary"):
+            st.session_state.announcements_db = edited_announce
+            save_all()
+            st.rerun()
+
+# ------------------------------------------
+# 💰 หน้า 6: บัญชีรายรับ
+# ------------------------------------------
+elif menu == "💰 บัญชีรายรับ":
+    st.title("💰 บันทึกบัญชีรายรับ")
+    st.info("กรอกรายได้ดิบ ระบบจะหัก 17% ให้โดยอัตโนมัติ")
+    with st.form("add_finance"):
+        c1, c2 = st.columns(2)
+        d = c1.date_input("วันที่")
+        b = c1.selectbox("ชื่อเรื่อง", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["ไม่มีข้อมูล"])
+        p = c2.selectbox("แพลตฟอร์ม", st.session_state.app_settings['platforms'])
+        amt = c2.number_input("ยอดรายได้ดิบ (฿)", min_value=0.0)
+        if st.form_submit_button("บันทึกรายได้"):
+            if b != "ไม่มีข้อมูล":
+                new_f = pd.DataFrame([{'วันที่':d.strftime("%Y-%m-%d"), 'ชื่อเรื่อง':b, 'แพลตฟอร์ม':p, 'ยอดดิบ':amt, 'หักแพลตฟอร์ม (17%)':amt*0.17, 'ยอดสุทธิ':amt*0.83}])
+                st.session_state.finance_db = pd.concat([st.session_state.finance_db, new_f], ignore_index=True)
+                save_all(); st.rerun()
+                
+    st.write("#### ✏️ ตารางแก้ไข/ลบข้อมูลรายรับ")
+    edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
+    if st.button("💾 บันทึกตารางบัญชีล่าสุด"): 
+        st.session_state.finance_db = edited_finance; save_all(); st.rerun()
+
+# ------------------------------------------
+# 💸 หน้า 7: แบ่งรายได้ (QC)
+# ------------------------------------------
+elif menu == "💸 สรุปส่วนแบ่ง (QC)":
+    st.title("💸 ระบบสรุปส่วนแบ่งรายได้ (QC)")
+    if st.session_state.finance_db.empty or not st.session_state.books_data: st.warning("⚠️ ยังไม่มีข้อมูลนิยายหรือรายได้")
+    else:
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']]
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
+        
+        c_filter1, _ = st.columns(2)
+        av_months = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
+        sel_month = c_filter1.selectbox("📌 เลือกรอบเดือนที่ต้องการดูยอด", av_months if av_months else [datetime.now().strftime('%Y-%m')])
+        df_month = df_merge[df_merge['เดือน-ปี'] == sel_month]
+        
+        st.markdown("---")
+        rev_tong = df_month[df_month['QC'] == 'ตอง']['ยอดสุทธิ'].sum()
+        rev_tao = df_month[df_month['QC'] == 'ตาว']['ยอดสุทธิ'].sum()
+        total_m = df_month['ยอดสุทธิ'].sum()
+
+        col1, col2, col3 = st.columns(3)
+        with col1: st.markdown(f"<div class='metric-card'><h3 style='color:#6C63FF;'>💖 ยอดของ ตอง</h3><h2>฿{rev_tong:,.2f}</h2></div>", unsafe_allow_html=True)
+        with col2: st.markdown(f"<div class='metric-card'><h3 style='color:#FF6584;'>💙 ยอดของ ตาว</h3><h2>฿{rev_tao:,.2f}</h2></div>", unsafe_allow_html=True)
+        with col3: st.markdown(f"<div class='metric-card'><h3>🌍 รวมทั้งเดือน</h3><h2>฿{total_m:,.2f}</h2></div>", unsafe_allow_html=True)
+
+        who = st.multiselect("กรองดูเฉพาะรายชื่อ:", options=['ตอง', 'ตาว'], default=['ตอง', 'ตาว'])
+        st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
+
+# ------------------------------------------
+# 🏆 หน้า 8: อันดับนิยายขายดี
+# ------------------------------------------
+elif menu == "🏆 อันดับนิยายขายดี":
+    st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
+    if st.session_state.finance_db.empty or not st.session_state.books_data: st.warning("⚠️ ยังไม่มีข้อมูลเพียงพอ")
+    else:
+        df_fin = st.session_state.finance_db.copy()
+        df_books = pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC', 'ภาพปก']]
+        df_merge = pd.merge(df_fin, df_books, on='ชื่อเรื่อง', how='left')
+        df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ'], errors='coerce').fillna(0)
+        df_merge['วันที่'] = pd.to_datetime(df_merge['วันที่'])
+        df_merge['เดือน-ปี'] = df_merge['วันที่'].dt.strftime('%Y-%m')
+
+        st.subheader("📈 กราฟเปรียบเทียบแนวโน้ม (Trend)")
+        trend_df = df_merge.groupby(['เดือน-ปี', 'QC'])['ยอดสุทธิ'].sum().reset_index()
+        if not trend_df.empty:
+            fig_trend = px.line(trend_df, x='เดือน-ปี', y='ยอดสุทธิ', color='QC', markers=True, color_discrete_map={'ตอง':'#6C63FF', 'ตาว':'#FF6584'})
+            fig_trend.update_layout(font_family="Kanit", margin=dict(t=20, b=20))
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+        st.markdown("---")
+
+        def draw_top_10_html(df_source, title, box_class):
+            top_10 = df_source.groupby('ชื่อเรื่อง').agg({'ยอดสุทธิ':'sum', 'ภาพปก':'first'}).reset_index()
+            top_10 = top_10.sort_values('ยอดสุทธิ', ascending=False).head(10)
+            
+            html_content = f"<div class='{box_class}'><h3 style='text-align:center; margin-bottom:25px;'>{title}</h3>"
+            if top_10.empty:
+                html_content += "<p style='text-align:center; color:#888;'>ยังไม่มีข้อมูล</p></div>"
+                st.markdown(html_content, unsafe_allow_html=True); return
+
+            html_content += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;'>"
+            for i, row in enumerate(top_10.itertuples()):
+                img_url = row.ภาพปก if row.ภาพปก and str(row.ภาพปก).strip() != "" else "https://via.placeholder.com/200x300?text=No+Cover"
+                card_html = f"<div class='rank-card' style='padding:10px;'><img src='{img_url}' style='width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1); margin-bottom:8px;' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/200x300?text=Error';\"><div style='font-size:12px; line-height:1.2; margin-bottom:4px; font-weight:600; height:28px; overflow:hidden;'><b>#{i+1}</b> {row.ชื่อเรื่อง}</div><div style='color:#6C63FF; font-weight:bold; font-size:14px;'>฿{row.ยอดสุทธิ:,.0f}</div></div>"
+                html_content += card_html
+            html_content += "</div></div>"
+            st.markdown(html_content.replace('\n', ''), unsafe_allow_html=True)
+
+        all_m = sorted(df_merge['เดือน-ปี'].dropna().unique(), reverse=True)
+        cur_m = all_m[0] if all_m else None
+
+        st.subheader("🌍 Top 10 ขายดีภาพรวม (ทั้งหมด)")
+        col_all1, col_all2 = st.columns(2)
+        with col_all1:
+            if cur_m: draw_top_10_html(df_merge[df_merge['เดือน-ปี'] == cur_m], f"📅 ประจำเดือน {cur_m}", "split-box-blue")
+        with col_all2:
+            draw_top_10_html(df_merge, "🌟 ตลอดกาล (All-Time)", "split-box-pink")
+
+# ------------------------------------------
+# ⚙️ หน้า 9: ตั้งค่าระบบ
+# ------------------------------------------
+elif menu == "⚙️ ตั้งค่าระบบ":
+    st.title("⚙️ ตั้งค่าระบบ")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("📚 หมวดหมู่นิยาย")
+        ed_c = st.data_editor(pd.DataFrame(st.session_state.app_settings['categories'], columns=['ชื่อหมวดหมู่']), num_rows="dynamic", use_container_width=True)
+    with c2:
+        st.subheader("🌐 แพลตฟอร์ม (รวมในลิงก์อ่านด้วย)")
+        ed_p = st.data_editor(pd.DataFrame(st.session_state.app_settings['platforms'], columns=['ชื่อแพลตฟอร์ม']), num_rows="dynamic", use_container_width=True)
+    st.markdown("---")
+    if st.button("💾 บันทึกการตั้งค่าทั้งหมด", type="primary"):
+        st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
+        st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
+        save_all(); st.rerun()
