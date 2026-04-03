@@ -82,6 +82,13 @@ st.markdown("""
     }
     
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
+    
+    /* สไตล์ตกแต่งหน้าความคืบหน้า */
+    .progress-box { background: white; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f0f4f8; height: 100%; }
+    .progress-box h4 { color: #475569; font-size: 1.1rem; margin-bottom: 15px; }
+    .progress-value { font-size: 2.5rem; font-weight: 700; }
+    .val-tong { color: #FF6584; }
+    .val-tao { color: #38bdf8; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -154,10 +161,17 @@ def load_announcements():
     try: return conn.read(worksheet="Announcements", ttl=0)
     except: return pd.DataFrame(columns=['วันที่', 'หัวข้อประกาศ', 'เนื้อหา', 'สถานะ'])
 
+# 🚀 ฟังก์ชันโหลดตารางบันทึกความคืบหน้า
+@st.cache_data(ttl=300)
+def load_progress_data():
+    try: return conn.read(worksheet="ProgressLog", ttl=0)
+    except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
+
 if 'books_data' not in st.session_state: st.session_state.books_data = load_admin_data()
 if 'finance_db' not in st.session_state: st.session_state.finance_db = load_finance_data()
 if 'app_settings' not in st.session_state: st.session_state.app_settings = load_settings()
 if 'announcements_db' not in st.session_state: st.session_state.announcements_db = load_announcements()
+if 'progress_log_db' not in st.session_state: st.session_state.progress_log_db = load_progress_data()
 
 def save_all():
     try:
@@ -183,6 +197,12 @@ def save_all():
         else:
             conn.update(worksheet="Announcements", data=pd.DataFrame(columns=['วันที่', 'หัวข้อประกาศ', 'เนื้อหา', 'สถานะ']))
             
+        # 🚀 บันทึกข้อมูลความคืบหน้าลง Sheets
+        if not st.session_state.progress_log_db.empty:
+            conn.update(worksheet="ProgressLog", data=st.session_state.progress_log_db)
+        else:
+            conn.update(worksheet="ProgressLog", data=pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม']))
+            
         st.cache_data.clear()
         st.toast("✅ บันทึกข้อมูลเรียบร้อย!")
     except Exception as e: st.error(f"Error saving: {e}")
@@ -192,11 +212,11 @@ def save_all():
 # ==========================================
 st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
 
-# 🚀 เพิ่มการใช้งาน Session State เก็บสถานะของเมนู เพื่อให้วาร์ปข้ามหน้าได้
 menu_options = [
     "📊 Dashboard", 
     "📚 คลังนิยาย", 
-    "📝 อัปเดตตอนใหม่",   # <--- เมนูใหม่สำหรับอัปเดตงานรายวันโดยเฉพาะ
+    "📝 อัปเดตตอนใหม่", 
+    "📈 ความคืบหน้างานแปล", # <--- เมนูใหม่สำหรับเช็คยอดแปล
     "⚡ แก้ไขด่วน (Quick Edit)", 
     "📢 แนะนำนิยาย", 
     "📰 จัดการประกาศ",
@@ -416,11 +436,11 @@ elif menu == "📚 คลังนิยาย":
                             st.session_state.selected_book_idx = b['_orig_idx']; st.rerun()
 
 # ------------------------------------------
-# 📝 หน้าใหม่: อัปเดตตอนใหม่ & ลิงก์ต้นฉบับ 🚀
+# 📝 หน้า 3: อัปเดตตอนใหม่ & ลิงก์ต้นฉบับ 🚀
 # ------------------------------------------
 elif menu == "📝 อัปเดตตอนใหม่":
     st.title("📝 อัปเดตตอนใหม่ & วาร์ปต้นฉบับ")
-    st.info("💡 ค้นหานิยายที่กำลังแปล กดลิงก์เพื่อไปอ่านต้นฉบับภาษาเกาหลี แล้วกลับมาอัปเดตจำนวนตอนได้ทันที!")
+    st.info("💡 ค้นหานิยายที่กำลังแปล กดลิงก์ไปอ่านต้นฉบับภาษาเกาหลี แล้วกลับมาบันทึกยอดการแปลรายวันได้ทันที!")
     
     search_update = st.text_input("🔍 พิมพ์ชื่อเรื่องที่ต้องการอัปเดต...", key="search_update")
     
@@ -435,23 +455,32 @@ elif menu == "📝 อัปเดตตอนใหม่":
     else:
         for b in filtered_for_update:
             idx = b['_orig_idx']
-            # สร้างกล่องพับเก็บได้สำหรับนิยายแต่ละเรื่อง
             with st.expander(f"📖 {b['ชื่อเรื่อง']} | สถานะ: {b.get('สถานะ', '')} | ตอนที่แปลเสร็จ: {b.get('ตอนปัจจุบัน', 0)} / {b.get('เป้าหมาย', 1)}"):
                 c1, c2 = st.columns([1, 4])
                 
-                # โชว์รูปปกเล็กๆ ด้านซ้าย
                 with c1:
                     img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/150x225?text=No+Cover"
                     st.markdown(f"<img src='{img_url}' style='width:100%; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1);' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/150x225?text=Error';\">", unsafe_allow_html=True)
                 
-                # พื้นที่ควบคุมด้านขวา
                 with c2:
-                    st.markdown("#### ⚙️ อัปเดตตอนล่าสุด")
+                    st.markdown("#### ⚙️ อัปเดตยอดการแปล")
                     c_input, c_btn = st.columns([2, 1])
                     
-                    # 1. กล่องเพิ่มลดตอน
-                    new_chap = c_input.number_input("แก้ไขตอน (ตอนปัจจุบัน)", value=int(b.get('ตอนปัจจุบัน', 0)), min_value=0, key=f"upd_chap_{idx}")
+                    old_chap = int(b.get('ตอนปัจจุบัน', 0))
+                    new_chap = c_input.number_input("แก้ไขตอน (ตอนปัจจุบันที่แปลเสร็จ)", value=old_chap, min_value=0, key=f"upd_chap_{idx}")
+                    
                     if c_btn.button("💾 บันทึกตอน", key=f"save_chap_{idx}", type="primary", use_container_width=True):
+                        # 🚀 ระบบคำนวณและบันทึกความคืบหน้าอัตโนมัติ
+                        if new_chap > old_chap:
+                            added_chaps = new_chap - old_chap
+                            new_log = pd.DataFrame([{
+                                'วันที่': datetime.today().strftime('%Y-%m-%d'),
+                                'ชื่อเรื่อง': b['ชื่อเรื่อง'],
+                                'QC': b.get('QC', 'ตอง'),
+                                'จำนวนตอนที่เพิ่ม': added_chaps
+                            }])
+                            st.session_state.progress_log_db = pd.concat([st.session_state.progress_log_db, new_log], ignore_index=True)
+                            
                         st.session_state.books_data[idx]['ตอนปัจจุบัน'] = new_chap
                         save_all()
                         st.rerun()
@@ -460,29 +489,92 @@ elif menu == "📝 อัปเดตตอนใหม่":
                     st.markdown("#### 🇰🇷 ลิงก์ต้นฉบับ & การจัดการ")
                     c_link, c_manage = st.columns(2)
                     
-                    # 2. ปุ่มวาร์ปลิงก์ต้นฉบับ
                     with c_link:
                         orig_links = b.get('ลิงก์ต้นฉบับ', [])
                         has_link = False
                         if isinstance(orig_links, list):
                             for i, link in enumerate(orig_links):
                                 url = link.get('url', '')
+                                note = link.get('note', '')
                                 if url:
                                     has_link = True
-                                    # สร้างปุ่มลิงก์ กระโดดไปเปิดแท็บใหม่ทันที
-                                    st.link_button(f"🔗 ไปยังเว็บต้นฉบับ {i+1}", url, use_container_width=True)
+                                    # 🚀 แสดงข้อความจากช่องหมายเหตุ ถ้าไม่มีให้แสดงคำเริ่มต้น
+                                    btn_label = f"🔗 {note}" if note and str(note).strip() != "" else f"🔗 ไปยังเว็บต้นฉบับ {i+1}"
+                                    st.link_button(btn_label, url, use_container_width=True)
                         if not has_link:
                             st.warning("ยังไม่ได้ใส่ข้อมูลลิงก์ต้นฉบับในเรื่องนี้ครับ")
                             
-                    # 3. ปุ่มทางลัดไปหน้าจัดการหลัก
                     with c_manage:
                         if st.button("🛠️ จัดการข้อมูลเต็ม (แก้ไขเรื่องย่อ/ปก)", key=f"go_edit_{idx}", use_container_width=True):
                             st.session_state.selected_book_idx = idx
-                            st.session_state.main_menu = "📚 คลังนิยาย" # สั่งเปลี่ยนเมนูกลับไปหน้าคลังนิยายอัตโนมัติ
+                            st.session_state.main_menu = "📚 คลังนิยาย"
                             st.rerun()
 
 # ------------------------------------------
-# ⚡ หน้า 4: แก้ไขด่วน (Quick Edit)
+# 📈 หน้า 4: ความคืบหน้างานแปล (ใหม่ล่าสุด!)
+# ------------------------------------------
+elif menu == "📈 ความคืบหน้างานแปล":
+    st.title("📈 ติดตามความคืบหน้างานแปล")
+    
+    if st.session_state.progress_log_db.empty:
+        st.info("💡 ยังไม่มีการบันทึกความคืบหน้าครับ (ระบบจะเริ่มบันทึกอัตโนมัติเมื่อกด 'บันทึกตอน' ในหน้าอัปเดตตอนใหม่)")
+    else:
+        df_prog = st.session_state.progress_log_db.copy()
+        df_prog['วันที่'] = pd.to_datetime(df_prog['วันที่'], errors='coerce')
+        df_prog['จำนวนตอนที่เพิ่ม'] = pd.to_numeric(df_prog['จำนวนตอนที่เพิ่ม'], errors='coerce').fillna(0)
+        
+        # คำนวณวันที่สำหรับกรองข้อมูล
+        today_date = pd.Timestamp(datetime.today().date())
+        start_of_week = today_date - pd.Timedelta(days=today_date.dayofweek) # จันทร์เป็นวันแรกของสัปดาห์
+        start_of_month = today_date.replace(day=1)
+        
+        df_today = df_prog[df_prog['วันที่'] == today_date]
+        df_week = df_prog[df_prog['วันที่'] >= start_of_week]
+        df_month = df_prog[df_prog['วันที่'] >= start_of_month]
+        
+        def get_sum(df, qc_name): return int(df[df['QC'] == qc_name]['จำนวนตอนที่เพิ่ม'].sum())
+        
+        # 🌟 ส่วนที่ 1: การ์ดแสดงผลสรุปยอด
+        st.markdown("### 🏆 สรุปยอดจำนวนตอนที่แปลเพิ่ม")
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            st.markdown("<div class='progress-box'><h4>📅 ผลงานวันนี้</h4>"
+                        f"<div style='margin-bottom:10px;'><span style='font-size:1.2rem;'>ตอง: </span><span class='progress-value val-tong'>{get_sum(df_today, 'ตอง')}</span></div>"
+                        f"<div><span style='font-size:1.2rem;'>ตาว: </span><span class='progress-value val-tao'>{get_sum(df_today, 'ตาว')}</span></div></div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown("<div class='progress-box'><h4>🗓️ ผลงานสัปดาห์นี้</h4>"
+                        f"<div style='margin-bottom:10px;'><span style='font-size:1.2rem;'>ตอง: </span><span class='progress-value val-tong'>{get_sum(df_week, 'ตอง')}</span></div>"
+                        f"<div><span style='font-size:1.2rem;'>ตาว: </span><span class='progress-value val-tao'>{get_sum(df_week, 'ตาว')}</span></div></div>", unsafe_allow_html=True)
+        with c3:
+            total_month_tong = get_sum(df_month, 'ตอง')
+            total_month_tao = get_sum(df_month, 'ตาว')
+            st.markdown("<div class='progress-box'><h4>🌍 ผลงานเดือนนี้</h4>"
+                        f"<div style='margin-bottom:10px;'><span style='font-size:1.2rem;'>ตอง: </span><span class='progress-value val-tong'>{total_month_tong}</span></div>"
+                        f"<div><span style='font-size:1.2rem;'>ตาว: </span><span class='progress-value val-tao'>{total_month_tao}</span></div></div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        
+        # 🌟 ส่วนที่ 2: AI วิเคราะห์และให้คำแนะนำ
+        st.markdown("### 🤖 AI Executive Report (วิเคราะห์สปีดงานแปล)")
+        
+        total_month_all = total_month_tong + total_month_tao
+        
+        ai_text = f"""
+        <div class='ai-main'>
+            <h4 style='color:#6C63FF; margin-bottom:10px;'>📊 ภาพรวมการทำงานของทีม</h4>
+            <p>ภาพรวมสปีดงานแปลของทีมในเดือนนี้ถือว่าทำยอดรวมไปได้แล้ว <b>{total_month_all} ตอน</b> แบ่งเป็นผลงานของตอง {total_month_tong} ตอน และของตาว {total_month_tao} ตอนครับ</p>
+            <p>💡 <b>เป้าหมายโปรเจกต์ใหญ่:</b> เพื่อบริหารจัดการการแปลนิยายระดับมาสเตอร์พีซทั้ง 10 เรื่อง (ความยาวเรื่องละ 150 ตอน) ให้บรรลุเป้าหมายภายในเวลา 1 เดือน เราจะต้องสร้างอัตราการแปลเฉลี่ยให้ได้รวมวันละประมาณ 50 ตอนครับ หากเรารักษาความเร็วการแปลให้สม่ำเสมอในทุกๆ วัน การปิดโปรเจกต์สุดหินนี้ก็อยู่ในกำมือเราแน่นอนครับ สู้ๆ ค๊า!</p>
+        </div>
+        """
+        st.markdown(ai_text.replace('\n', ''), unsafe_allow_html=True)
+        
+        st.markdown("---")
+        with st.expander("📋 ดูประวัติการบันทึกข้อมูลย้อนหลังทั้งหมด"):
+            st.dataframe(df_prog.sort_values(by='วันที่', ascending=False), use_container_width=True)
+
+# ------------------------------------------
+# ⚡ หน้า 5: แก้ไขด่วน (Quick Edit)
 # ------------------------------------------
 elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
     st.title("⚡ ระบบแก้ไขด่วนแบบตาราง")
@@ -507,7 +599,7 @@ elif menu == "⚡ แก้ไขด่วน (Quick Edit)":
             save_all(); st.rerun()
 
 # ------------------------------------------
-# 📢 หน้า 5: แนะนำนิยาย (Promo Page)
+# 📢 หน้า 6: แนะนำนิยาย (Promo Page)
 # ------------------------------------------
 elif menu == "📢 แนะนำนิยาย":
     if st.session_state.selected_promo_idx is not None:
@@ -572,7 +664,7 @@ elif menu == "📢 แนะนำนิยาย":
                             st.session_state.selected_promo_idx = i+j; st.rerun()
 
 # ------------------------------------------
-# 📰 หน้า 6: จัดการประกาศ
+# 📰 หน้า 7: จัดการประกาศ
 # ------------------------------------------
 elif menu == "📰 จัดการประกาศ":
     st.title("📰 จัดการประกาศ (Announcements)")
@@ -618,7 +710,7 @@ elif menu == "📰 จัดการประกาศ":
             st.rerun()
 
 # ------------------------------------------
-# 💰 หน้า 7: บัญชีรายรับ
+# 💰 หน้า 8: บัญชีรายรับ
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บันทึกบัญชีรายรับ")
@@ -641,7 +733,7 @@ elif menu == "💰 บัญชีรายรับ":
         st.session_state.finance_db = edited_finance; save_all(); st.rerun()
 
 # ------------------------------------------
-# 💸 หน้า 8: แบ่งรายได้ (QC)
+# 💸 หน้า 9: แบ่งรายได้ (QC)
 # ------------------------------------------
 elif menu == "💸 สรุปส่วนแบ่ง (QC)":
     st.title("💸 ระบบสรุปส่วนแบ่งรายได้ (QC)")
@@ -673,7 +765,7 @@ elif menu == "💸 สรุปส่วนแบ่ง (QC)":
         st.dataframe(df_month[df_month['QC'].isin(who)][['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# 🏆 หน้า 9: อันดับนิยายขายดี
+# 🏆 หน้า 10: อันดับนิยายขายดี
 # ------------------------------------------
 elif menu == "🏆 อันดับนิยายขายดี":
     st.title("🏆 อันดับนิยายขายดี (Leaderboard)")
@@ -723,7 +815,7 @@ elif menu == "🏆 อันดับนิยายขายดี":
             draw_top_10_html(df_merge, "🌟 ตลอดกาล (All-Time)", "split-box-pink")
 
 # ------------------------------------------
-# ⚙️ หน้า 10: ตั้งค่าระบบ
+# ⚙️ หน้า 11: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าระบบ")
