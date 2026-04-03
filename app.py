@@ -108,20 +108,33 @@ def load_admin_data():
         df_b = conn.read(worksheet="Books", ttl=0)
         books = df_b.to_dict('records')
         for b in books:
-            try: b['ลิงก์อ่าน'] = json.loads(b['ลิงก์อ่าน']) if b.get('ลิงก์อ่าน') and str(b['ลิงก์อ่าน']).strip() != '' else []
-            except: b['ลิงก์อ่าน'] = []
+            # 🛠️ ฟังก์ชันย่อยสำหรับล้างค่า nan (Not a Number) ที่เกิดจากช่องว่าง
+            def clean_str(val):
+                return str(val) if pd.notna(val) and str(val).lower() != 'nan' else ''
             
-            try: b['ลิงก์ต้นฉบับ'] = json.loads(b['ลิงก์ต้นฉบับ']) if b.get('ลิงก์ต้นฉบับ') and str(b['ลิงก์ต้นฉบับ']).strip() != '' else []
+            b['ภาพปก'] = clean_str(b.get('ภาพปก'))
+            b['เรื่องย่อ'] = clean_str(b.get('เรื่องย่อ'))
+            b['หมายเหตุ'] = clean_str(b.get('หมายเหตุ'))
+            
+            # 🛠️ ป้องกัน Error DataFrame constructor จากลิงก์อ่าน/ลิงก์ต้นฉบับ
+            try: 
+                l_read = b.get('ลิงก์อ่าน')
+                b['ลิงก์อ่าน'] = json.loads(l_read) if pd.notna(l_read) and str(l_read).strip() not in ['', 'nan'] else []
+            except: b['ลิงก์อ่าน'] = []
+            if not isinstance(b['ลิงก์อ่าน'], list): b['ลิงก์อ่าน'] = []
+            
+            try: 
+                l_orig = b.get('ลิงก์ต้นฉบับ')
+                b['ลิงก์ต้นฉบับ'] = json.loads(l_orig) if pd.notna(l_orig) and str(l_orig).strip() not in ['', 'nan'] else []
             except: b['ลิงก์ต้นฉบับ'] = []
+            if not isinstance(b['ลิงก์ต้นฉบับ'], list): b['ลิงก์ต้นฉบับ'] = []
             
             b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
             b['หมวดหมู่'] = b.get('หมวดหมู่', 'ทั่วไป')
             b['QC'] = b.get('QC', 'ตอง')
             b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
             b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
-            b['เรื่องย่อ'] = str(b.get('เรื่องย่อ', '')) if pd.notna(b.get('เรื่องย่อ')) else ''
-            b['ภาพปก'] = str(b.get('ภาพปก', '')) if pd.notna(b.get('ภาพปก')) else ''
-            b['หมายเหตุ'] = str(b.get('หมายเหตุ', '')) if pd.notna(b.get('หมายเหตุ')) else ''
+
         return books
     except: return []
 
@@ -241,7 +254,7 @@ if menu == "📊 Dashboard":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📚 หน้า 2: คลังนิยาย (ระบบ 6 คอลัมน์ + อัปโหลดรูป + เลือกลิงก์)
+# 📚 หน้า 2: คลังนิยาย
 # ------------------------------------------
 elif menu == "📚 คลังนิยาย":
     # 📌 โหมดแก้ไขนิยายเดี่ยว
@@ -286,8 +299,12 @@ elif menu == "📚 คลังนิยาย":
             l1, l2 = st.columns(2)
             with l1:
                 st.write("**📖 ลิงก์ช่องทางอ่าน (แสดงผลหน้า Public)**")
-                df_read = pd.DataFrame(b.get('ลิงก์อ่าน', [{"note":"ReadToon", "url":""}]))
-                if df_read.empty: df_read = pd.DataFrame([{"note":"ReadToon", "url":""}])
+                # 🛠️ ตรวจสอบค่าลิงก์อ่านให้ปลอดภัยก่อนโยนให้ DataFrame
+                read_data = b.get('ลิงก์อ่าน', [])
+                if not isinstance(read_data, list) or len(read_data) == 0:
+                    read_data = [{"note":"ReadToon", "url":""}]
+                df_read = pd.DataFrame(read_data)
+                
                 edited_read = st.data_editor(
                     df_read, 
                     num_rows="dynamic", 
@@ -300,8 +317,11 @@ elif menu == "📚 คลังนิยาย":
                 )
             with l2:
                 st.write("**🇰🇷 ลิงก์ต้นฉบับ**")
-                df_orig = pd.DataFrame(b.get('ลิงก์ต้นฉบับ', [{"url":"", "note":""}]))
-                if df_orig.empty: df_orig = pd.DataFrame([{"url":"", "note":""}])
+                # 🛠️ ตรวจสอบค่าลิงก์ต้นฉบับให้ปลอดภัย ป้องกัน ValueError
+                orig_data = b.get('ลิงก์ต้นฉบับ', [])
+                if not isinstance(orig_data, list) or len(orig_data) == 0:
+                    orig_data = [{"url":"", "note":""}]
+                df_orig = pd.DataFrame(orig_data)
                 edited_orig = st.data_editor(df_orig, num_rows="dynamic", use_container_width=True, key=f"edit_orig_{idx}")
 
             sv_col, del_col = st.columns(2)
@@ -355,7 +375,6 @@ elif menu == "📚 คลังนิยาย":
             b['_orig_idx'] = idx 
             filtered_books.append(b)
 
-        # 🌟 โชว์ 6 คอลัมน์
         for i in range(0, len(filtered_books), 6):
             cols = st.columns(6)
             for j, col in enumerate(cols):
