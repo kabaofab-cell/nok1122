@@ -149,7 +149,7 @@ def load_settings():
     except:
         return {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
 
-# 📢 ฟังก์ชันดึงข้อมูลประกาศ (ใหม่!)
+# 📢 ฟังก์ชันดึงข้อมูลประกาศ
 @st.cache_data(ttl=300)
 def load_announcements():
     try: return conn.read(worksheet="Announcements", ttl=0)
@@ -180,8 +180,12 @@ def save_all():
         conn.update(worksheet="Settings", data=set_df)
         
         # 📢 บันทึกข้อมูลประกาศลง Sheets
-        conn.update(worksheet="Announcements", data=st.session_state.announcements_db)
-        
+        if not st.session_state.announcements_db.empty:
+            conn.update(worksheet="Announcements", data=st.session_state.announcements_db)
+        else:
+            # ถ้าตารางว่าง ให้สร้างตารางเปล่าพร้อมชื่อคอลัมน์
+            conn.update(worksheet="Announcements", data=pd.DataFrame(columns=['วันที่', 'หัวข้อประกาศ', 'เนื้อหา', 'สถานะ']))
+            
         st.cache_data.clear()
         st.toast("✅ บันทึกข้อมูลเรียบร้อย!")
     except Exception as e: st.error(f"Error saving: {e}")
@@ -195,7 +199,7 @@ menu = st.sidebar.radio("Navigation Menu", [
     "📚 คลังนิยาย", 
     "⚡ แก้ไขด่วน (Quick Edit)", 
     "📢 แนะนำนิยาย", 
-    "📰 จัดการประกาศ",  # <--- เมนูใหม่ค๊า!
+    "📰 จัดการประกาศ",
     "💰 บัญชีรายรับ", 
     "💸 สรุปส่วนแบ่ง (QC)", 
     "🏆 อันดับนิยายขายดี", 
@@ -497,7 +501,7 @@ elif menu == "📢 แนะนำนิยาย":
                             st.session_state.selected_promo_idx = i+j; st.rerun()
 
 # ------------------------------------------
-# 📰 หน้า 5: จัดการประกาศ (หน้าใหม่ล่าสุด!)
+# 📰 หน้า 5: จัดการประกาศ (แก้บั๊ก DateColumn แล้ว!)
 # ------------------------------------------
 elif menu == "📰 จัดการประกาศ":
     st.title("📰 จัดการประกาศ (Announcements)")
@@ -528,12 +532,13 @@ elif menu == "📰 จัดการประกาศ":
     if st.session_state.announcements_db.empty:
         st.write("ยังไม่มีข้อมูลประกาศในระบบค๊า")
     else:
+        # 🛠️ เปลี่ยนจาก DateColumn เป็น TextColumn ธรรมดา เพื่อป้องกันบั๊ก Data Type Mismatch 100%
         edited_announce = st.data_editor(
             st.session_state.announcements_db, 
             num_rows="dynamic", 
             use_container_width=True,
             column_config={
-                "วันที่": st.column_config.DateColumn("วันที่", format="YYYY-MM-DD"),
+                "วันที่": st.column_config.TextColumn("วันที่ (YYYY-MM-DD)", required=True),
                 "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["แสดง", "ซ่อน"], required=True)
             }
         )
