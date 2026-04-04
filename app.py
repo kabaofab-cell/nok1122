@@ -10,22 +10,8 @@ from datetime import datetime
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
 # ==========================================
 IMGBB_API_KEY = "c2632e406b68246bd02423be8f9bf384"
-ADMIN_PASSWORD = "nokkaew2026" # <-- เปลี่ยนรหัสผ่านเข้าหลังบ้านตรงนี้
 
 st.set_page_config(page_title="Nok-kaew Admin Pro", layout="wide", page_icon="💎")
-
-# --- ระบบ Login ---
-if "auth" not in st.session_state: st.session_state.auth = False
-if not st.session_state.auth:
-    st.markdown("<h1 style='text-align:center; color:#6C63FF; margin-top:100px;'>💎 Nok-kaew Admin Login</h1>", unsafe_allow_html=True)
-    c_l, c_m, c_r = st.columns([1,2,1])
-    with c_m:
-        pwd = st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน", type="password")
-        if st.button("เข้าสู่ระบบ", use_container_width=True, type="primary"):
-            if pwd == ADMIN_PASSWORD:
-                st.session_state.auth = True; st.rerun()
-            else: st.error("❌ รหัสผ่านไม่ถูกต้องค๊า!")
-    st.stop()
 
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Modern Premium UI)
@@ -216,7 +202,7 @@ menu_options = [
     "📊 Dashboard", 
     "📚 คลังนิยาย", 
     "📝 อัปเดตตอนใหม่", 
-    "📈 ความคืบหน้างานแปล", # <--- เมนูใหม่สำหรับเช็คยอดแปล
+    "📈 ความคืบหน้างานแปล",
     "⚡ แก้ไขด่วน (Quick Edit)", 
     "📢 แนะนำนิยาย", 
     "📰 จัดการประกาศ",
@@ -511,7 +497,7 @@ elif menu == "📝 อัปเดตตอนใหม่":
                             st.rerun()
 
 # ------------------------------------------
-# 📈 หน้า 4: ความคืบหน้างานแปล (ใหม่ล่าสุด!)
+# 📈 หน้า 4: ความคืบหน้างานแปล
 # ------------------------------------------
 elif menu == "📈 ความคืบหน้างานแปล":
     st.title("📈 ติดตามความคืบหน้างานแปล")
@@ -710,27 +696,88 @@ elif menu == "📰 จัดการประกาศ":
             st.rerun()
 
 # ------------------------------------------
-# 💰 หน้า 8: บัญชีรายรับ
+# 💰 หน้า 8: บัญชีรายรับ (ปรับปรุงใหม่ ฟีเจอร์เพิ่มรายรับรวดเร็ว)
 # ------------------------------------------
 elif menu == "💰 บัญชีรายรับ":
     st.title("💰 บันทึกบัญชีรายรับ")
-    st.info("กรอกรายได้ดิบ ระบบจะหัก 17% ให้โดยอัตโนมัติ")
-    with st.form("add_finance"):
-        c1, c2 = st.columns(2)
-        d = c1.date_input("วันที่")
-        b = c1.selectbox("ชื่อเรื่อง", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["ไม่มีข้อมูล"])
-        p = c2.selectbox("แพลตฟอร์ม", st.session_state.app_settings['platforms'])
-        amt = c2.number_input("ยอดรายได้ดิบ (฿)", min_value=0.0)
-        if st.form_submit_button("บันทึกรายได้"):
-            if b != "ไม่มีข้อมูล":
-                new_f = pd.DataFrame([{'วันที่':d.strftime("%Y-%m-%d"), 'ชื่อเรื่อง':b, 'แพลตฟอร์ม':p, 'ยอดดิบ':amt, 'หักแพลตฟอร์ม (17%)':amt*0.17, 'ยอดสุทธิ':amt*0.83}])
-                st.session_state.finance_db = pd.concat([st.session_state.finance_db, new_f], ignore_index=True)
-                save_all(); st.rerun()
+    
+    tab1, tab2, tab3 = st.tabs(["⚡ เพิ่มรายรับรวดเร็ว (แบบกลุ่ม)", "📝 เพิ่มรายรับ (ทีละรายการ)", "✏️ แก้ไขข้อมูลทั้งหมด"])
+    
+    # 🌟 แท็บ 1: ฟีเจอร์เพิ่มรายรับรวดเร็วตามที่คุณขอ 
+    with tab1:
+        st.info("💡 เลือกระบุวันที่ลงบัญชี, แพลตฟอร์ม และผู้ดูแล (QC) ระบบจะแสดงรายชื่อนิยายทั้งหมดของคนนั้น ให้คุณใส่ยอดรายได้ดิบพร้อมกันได้เลยทีเดียว")
+        
+        c1, c2, c3 = st.columns(3)
+        q_date = c1.date_input("วันที่ลงบัญชี", key="q_date")
+        q_plat = c2.selectbox("แพลตฟอร์ม", st.session_state.app_settings['platforms'], key="q_plat")
+        q_qc = c3.selectbox("ผู้ดูแล (QC)", ["ตอง", "ตาว"], key="q_qc")
+        
+        # กรองนิยายเฉพาะที่เป็นของ QC คนที่เลือก
+        qc_books = [b['ชื่อเรื่อง'] for b in st.session_state.books_data if b.get('QC') == q_qc]
+        
+        if not qc_books:
+            st.warning(f"⚠️ ไม่พบนิยายที่ดูแลโดย {q_qc} ในระบบครับ")
+        else:
+            # สร้างตารางจำลองให้กรอกเฉพาะ "ยอดดิบ"
+            df_quick_fin = pd.DataFrame({
+                "ชื่อเรื่อง": qc_books,
+                "ยอดดิบ": [0.0] * len(qc_books)
+            })
+            
+            st.write(f"**กรอกยอดรายรับดิบของ {q_plat} ประจำวันที่ {q_date.strftime('%d/%m/%Y')}**")
+            edited_q_fin = st.data_editor(
+                df_quick_fin,
+                column_config={
+                    "ชื่อเรื่อง": st.column_config.TextColumn("ชื่อเรื่อง", disabled=True),
+                    "ยอดดิบ": st.column_config.NumberColumn("ยอดรายได้ดิบ (฿)", min_value=0.0, format="%.2f")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            if st.button("💾 บันทึกยอดรายรับเข้าสู่ระบบทั้งหมด", type="primary", use_container_width=True):
+                new_entries = []
+                for _, row in edited_q_fin.iterrows():
+                    amt = row["ยอดดิบ"]
+                    if amt > 0: # ดึงเฉพาะเรื่องที่มียอดเงินมากกว่า 0
+                        new_entries.append({
+                            'วันที่': q_date.strftime("%Y-%m-%d"),
+                            'ชื่อเรื่อง': row["ชื่อเรื่อง"],
+                            'แพลตฟอร์ม': q_plat,
+                            'ยอดดิบ': amt,
+                            'หักแพลตฟอร์ม (17%)': amt * 0.17,
+                            'ยอดสุทธิ': amt * 0.83
+                        })
                 
-    st.write("#### ✏️ ตารางแก้ไข/ลบข้อมูลรายรับ")
-    edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
-    if st.button("💾 บันทึกตารางบัญชีล่าสุด"): 
-        st.session_state.finance_db = edited_finance; save_all(); st.rerun()
+                if new_entries:
+                    st.session_state.finance_db = pd.concat([st.session_state.finance_db, pd.DataFrame(new_entries)], ignore_index=True)
+                    save_all()
+                    st.success(f"✅ บันทึกยอดรายรับใหม่จำนวน {len(new_entries)} รายการ ลงฐานข้อมูลเรียบร้อยแล้ว!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ ไม่มียอดให้บันทึก (คุณยังไม่ได้ใส่ยอดดิบในตารางครับ)")
+
+    # 🌟 แท็บ 2: ฟอร์มแบบเดิม (ทีละรายการ)
+    with tab2:
+        st.write("#### 📝 ฟอร์มเพิ่มรายได้ทีละเรื่อง")
+        with st.form("add_finance"):
+            c_f1, c_f2 = st.columns(2)
+            d = c_f1.date_input("วันที่")
+            b = c_f1.selectbox("ชื่อเรื่อง", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["ไม่มีข้อมูล"])
+            p = c_f2.selectbox("แพลตฟอร์ม", st.session_state.app_settings['platforms'])
+            amt = c_f2.number_input("ยอดรายได้ดิบ (฿)", min_value=0.0)
+            if st.form_submit_button("บันทึกรายได้"):
+                if b != "ไม่มีข้อมูล":
+                    new_f = pd.DataFrame([{'วันที่':d.strftime("%Y-%m-%d"), 'ชื่อเรื่อง':b, 'แพลตฟอร์ม':p, 'ยอดดิบ':amt, 'หักแพลตฟอร์ม (17%)':amt*0.17, 'ยอดสุทธิ':amt*0.83}])
+                    st.session_state.finance_db = pd.concat([st.session_state.finance_db, new_f], ignore_index=True)
+                    save_all(); st.rerun()
+                    
+    # 🌟 แท็บ 3: ตารางแก้ไขข้อมูลดิบ
+    with tab3:
+        st.write("#### ✏️ ตารางแก้ไข/ลบข้อมูลรายรับ")
+        edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
+        if st.button("💾 บันทึกตารางบัญชีล่าสุด"): 
+            st.session_state.finance_db = edited_finance; save_all(); st.rerun()
 
 # ------------------------------------------
 # 💸 หน้า 9: แบ่งรายได้ (QC)
