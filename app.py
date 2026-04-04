@@ -228,10 +228,10 @@ elif menu == "🎯 ReadToon Creator":  # ✅ เพิ่มใหม่
     # ปุ่มดึงข้อมูล
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-            if st.button("🔄 ดึงข้อมูลใหม่จาก ReadToon Creator", type="primary", use_container_width=True):
-    # เปลี่ยนมาใช้ st.secrets.get() เพื่อให้รองรับบน Streamlit Cloud
-    email = st.secrets.get("READTOON_EMAIL", os.getenv("READTOON_EMAIL"))
-    password = st.secrets.get("READTOON_PASSWORD", os.getenv("READTOON_PASSWORD"))
+        if st.button("🔄 ดึงข้อมูลใหม่จาก ReadToon Creator", type="primary", use_container_width=True):
+            # เปลี่ยนมาใช้ st.secrets.get() เพื่อให้รองรับบน Streamlit Cloud
+            email = st.secrets.get("READTOON_EMAIL", os.getenv("READTOON_EMAIL"))
+            password = st.secrets.get("READTOON_PASSWORD", os.getenv("READTOON_PASSWORD"))
             
             if not email or not password:
                 st.error("❌ ยังไม่ได้ตั้งค่า READTOON_EMAIL และ READTOON_PASSWORD ใน Secrets")
@@ -347,8 +347,8 @@ elif menu == "🎯 ReadToon Creator":  # ✅ เพิ่มใหม่
         4. Save และ Reboot script
         """)
         
-        email_status = "✅ ตั้งค่าแล้ว" if os.getenv("READTOON_EMAIL") else "❌ ยังไม่ตั้งค่า"
-        pass_status = "✅ ตั้งค่าแล้ว" if os.getenv("READTOON_PASSWORD") else "❌ ยังไม่ตั้งค่า"
+        email_status = "✅ ตั้งค่าแล้ว" if st.secrets.get("READTOON_EMAIL", os.getenv("READTOON_EMAIL")) else "❌ ยังไม่ตั้งค่า"
+        pass_status = "✅ ตั้งค่าแล้ว" if st.secrets.get("READTOON_PASSWORD", os.getenv("READTOON_PASSWORD")) else "❌ ยังไม่ตั้งค่า"
         
         st.write(f"**สถานะการตั้งค่า:**")
         st.write(f"  {email_status}")
