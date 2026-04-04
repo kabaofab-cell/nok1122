@@ -1,7 +1,0 @@
-streamlit
-pandas
-st-gsheets-connection
-plotly
-python-dotenv
-beautifulsoup4
-requests
