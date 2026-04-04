@@ -229,9 +229,16 @@ elif menu == "🎯 ReadToon Creator":  # ✅ เพิ่มใหม่
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         if st.button("🔄 ดึงข้อมูลใหม่จาก ReadToon Creator", type="primary", use_container_width=True):
-            # เปลี่ยนมาใช้ st.secrets.get() เพื่อให้รองรับบน Streamlit Cloud
-            email = st.secrets.get("READTOON_EMAIL", os.getenv("READTOON_EMAIL"))
-            password = st.secrets.get("READTOON_PASSWORD", os.getenv("READTOON_PASSWORD"))
+            # พยายามดึงค่าจาก st.secrets ก่อน ถ้าไม่มี (เกิด Error) ให้ไปดึงจาก os.getenv
+            try:
+                email = st.secrets["READTOON_EMAIL"]
+            except:
+                email = os.getenv("READTOON_EMAIL")
+                
+            try:
+                password = st.secrets["READTOON_PASSWORD"]
+            except:
+                password = os.getenv("READTOON_PASSWORD")
             
             if not email or not password:
                 st.error("❌ ยังไม่ได้ตั้งค่า READTOON_EMAIL และ READTOON_PASSWORD ใน Secrets")
