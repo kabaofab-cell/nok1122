@@ -2,3 +2,6 @@ streamlit
 pandas
 st-gsheets-connection
 plotly
+python-telegram-bot
+gspread
+oauth2client
