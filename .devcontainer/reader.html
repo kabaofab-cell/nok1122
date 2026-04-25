@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nok-kaew PDF Reader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        body { margin: 0; background: #333; font-family: sans-serif; overflow: hidden; }
+        #canvas-container { width: 100vw; height: 100vh; overflow: auto; position: relative; -webkit-overflow-scrolling: touch; }
+        canvas { display: block; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        
+        /* 🛡️ เลเยอร์ลายน้ำ */
+        #watermark {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+            display: flex; flex-wrap: wrap; justify-content: space-around; align-content: space-around;
+            opacity: 0.15; font-size: 20px; color: #fff; transform: rotate(-30deg);
+        }
+
+        /* 📱 แถบควบคุม */
+        .controls {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 30px;
+            display: flex; gap: 15px; z-index: 20; align-items: center;
+        }
+        button { background: #6C63FF; border: none; color: white; padding: 8px 15px; border-radius: 15px; cursor: pointer; }
+        span { color: white; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="watermark"></div>
+    <div id="canvas-container">
+        <canvas id="pdf-canvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <button onclick="changePage(-1)">◀</button>
+        <span id="page-num">1 / 1</span>
+        <button onclick="changePage(1)">▶</button>
+        <button onclick="zoom(0.2)">➕</button>
+        <button onclick="zoom(-0.2)">➖</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const pdfUrl = urlParams.get('pdf');
+        const userId = urlParams.get('uid') || 'Guest';
+
+        // สร้างลายน้ำ
+        const wm = document.getElementById('watermark');
+        for(let i=0; i<20; i++) {
+            const el = document.createElement('div');
+            el.innerText = `ID: ${userId} | Nok-kaew`;
+            wm.appendChild(el);
+        }
+
+        let pdfDoc = null, pageNum = 1, scale = 1.2, canvas = document.getElementById('pdf-canvas'), ctx = canvas.getContext('2d');
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(page => {
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                page.render({ canvasContext: ctx, viewport: viewport });
+                document.getElementById('page-num').innerText = `${num} / ${pdfDoc.numPages}`;
+            });
+        }
+
+        function changePage(delta) {
+            if (!pdfDoc || pageNum + delta < 1 || pageNum + delta > pdfDoc.numPages) return;
+            pageNum += delta;
+            renderPage(pageNum);
+        }
+
+        function zoom(delta) {
+            scale = Math.max(0.5, scale + delta);
+            renderPage(pageNum);
+        }
+
+        if (pdfUrl) {
+            pdfjsLib.getDocument(pdfUrl).promise.then(doc => {
+                pdfDoc = doc;
+                renderPage(pageNum);
+            }).catch(err => alert("ไม่สามารถโหลดไฟล์ได้: " + err.message));
+        }
+    </script>
+</body>
+</html>
