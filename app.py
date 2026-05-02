@@ -309,15 +309,13 @@ elif menu == "📅 ปฏิทินคิวงาน":
         
         if st.session_state.get("last_processed_state") != current_state_str:
             if state["callback"] == "dateClick":
-                # ดึงเฉพาะ YYYY-MM-DD โดยตัดตัว T (Time) ออก
-                raw_date = state["dateClick"]["date"]
-                clicked_date = raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]
+                # แก้ไขจากเดิม: ให้ดึง 10 ตัวแรกของสตริงวันที่โดยตรง (YYYY-MM-DD)
+                clicked_date = state["dateClick"]["date"][:10]
                 add_event_dialog(clicked_date, unique_novels, current_state_str)
                 
             elif state["callback"] == "eventClick":
                 event_id = state["eventClick"]["event"]["id"]
-                raw_date = state["eventClick"]["event"]["start"]
-                event_date = raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]
+                event_date = state["eventClick"]["event"]["start"][:10]
                 event_novel = state["eventClick"]["event"]["extendedProps"]["novel"]
                 event_chap = state["eventClick"]["event"]["extendedProps"]["chap"]
                 edit_event_dialog(event_id, event_date, event_novel, event_chap, unique_novels, current_state_str)
