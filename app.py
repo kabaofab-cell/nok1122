@@ -29,13 +29,14 @@ st.markdown("""
         font-family: 'Kanit', sans-serif !important; 
     }
     
-    .stApp { background-color: #f7f9fc; }
+    .stApp { background-color: #f8fafc; }
     
     [data-testid="stSidebar"] { background-color: #ffffff; box-shadow: 4px 0 15px rgba(0,0,0,0.03); }
     [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1e293b !important; font-weight: 600 !important; font-size: 15px !important; }
     @media (prefers-color-scheme: dark) {
-        [data-testid="stSidebar"] { background-color: #1e293b; }
+        [data-testid="stSidebar"] { background-color: #0f172a; }
         [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #f8fafc !important; }
+        .stApp { background-color: #1e293b; }
     }
     
     div[role="radiogroup"] > label { padding: 10px 20px; background: transparent; border-radius: 12px; transition: 0.3s ease; cursor: pointer; margin-bottom: 5px; }
@@ -44,18 +45,20 @@ st.markdown("""
     .stButton > button { border-radius: 25px; border: none; background: linear-gradient(135deg, #6C63FF 0%, #8A84FF 100%); color: white; font-weight: 500; transition: all 0.3s ease; }
     .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(108, 99, 255, 0.35); color: white; }
     
-    .metric-card { background: white; padding: 25px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; margin-bottom: 20px; border: 1px solid #f0f4f8; transition: 0.3s ease; }
+    .metric-card { background: white; padding: 25px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; margin-bottom: 20px; border: 1px solid #e2e8f0; transition: 0.3s ease; }
     @media (prefers-color-scheme: dark) { .metric-card { background: #1e293b; border-color: #334155; } }
     .metric-card h2 { color: #6C63FF; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
     
-    .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #f0f0f0; margin-bottom: 20px; }
+    .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 20px; }
     @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
     .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
     
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
     
-    .progress-box { background: white; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f0f4f8; height: 100%; }
+    .progress-box { background: white; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; height: 100%; }
+    @media (prefers-color-scheme: dark) { .progress-box { background: #1e293b; border-color: #334155; } }
     .progress-box h4 { color: #475569; font-size: 1.1rem; margin-bottom: 15px; }
+    @media (prefers-color-scheme: dark) { .progress-box h4 { color: #cbd5e1; } }
     .progress-value { font-size: 2.5rem; font-weight: 700; }
     .val-tong { color: #FF6584; }
     .val-tao { color: #38bdf8; }
@@ -82,7 +85,7 @@ def get_thai_date(raw_date_str):
         return str(raw_date_str)[:10]
 
 # ==========================================
-# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด (ระบบป้องกันข้อมูลหาย)
+# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -189,47 +192,37 @@ def save_all():
     except Exception as e: 
         st.error(f"Error saving: {e}")
 
-def parse_max_chapter(chap_str):
-    nums = re.findall(r'\d+', str(chap_str))
-    if nums:
-        return max([int(n) for n in nums])
-    return 0
-
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (Fix: Dropdown Reset Issue)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (เรียบง่ายและปลอดภัย)
 # ==========================================
-@st.dialog("📅 จัดการคิวงานรายวัน")
-def daily_manager_dialog(selected_date, unique_novels, current_state):
-    st.markdown(f"### 📌 ข้อมูลงานวันที่: {selected_date}")
-    st.info("กดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่กี่เรื่องก็ได้ครับ")
+@st.dialog("📅 บันทึกคิวงานรายวัน")
+def daily_manager_dialog(selected_date, unique_novels):
+    st.markdown(f"**ตารางงานของวันที่:** `{selected_date}`")
     
-    # 🛠️ Fix: ค้นหาข้อมูลและเก็บใน State ชั่วคราวเพื่อไม่ให้รีเซ็ตเมื่อ Dropdown เปลี่ยน
-    dialog_state_key = f"dialog_data_{selected_date}"
+    # ดึงข้อมูลของวันนั้นๆ
+    day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
     
-    if dialog_state_key not in st.session_state:
-        day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
-        if day_events.empty:
-            day_events = pd.DataFrame([{'ชื่อเรื่อง': unique_novels[0] if unique_novels else "", 'ตอนที่': ''}])
-        else:
-            day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
-        st.session_state[dialog_state_key] = day_events
+    options = unique_novels if unique_novels else ["ยังไม่มีข้อมูลนิยาย"]
 
-    # 🛠️ Fix: เปลี่ยน Key เป็นแบบคงที่โดยอิงกับวันที่ เพื่อไม่ให้ตารางสร้างใหม่ตลอดเวลา
+    if day_events.empty:
+        day_events = pd.DataFrame([{'ชื่อเรื่อง': options[0], 'ตอนที่': ''}])
+    else:
+        day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
+        # ป้องกันแอปดับกรณีชื่อเรื่องในฐานข้อมูลไม่ตรงกับรายการปัจจุบัน
+        day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
+
     edited_df = st.data_editor(
-        st.session_state[dialog_state_key], 
+        day_events, 
         column_config={
-            "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=unique_novels, required=True),
-            "ตอนที่": st.column_config.TextColumn("ระบุตอนที่ (เช่น 1-10)", required=True)
+            "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
+            "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป (เช่น 1-10)", required=True)
         },
         num_rows="dynamic",
         use_container_width=True,
-        key=f"editor_{selected_date}" 
+        key=f"editor_{selected_date}"
     )
     
-    # บันทึกค่าที่แก้ไขกลับเข้าไปใน State ชั่วคราว
-    st.session_state[dialog_state_key] = edited_df
-    
-    if st.button("💾 บันทึกการเปลี่ยนแปลง", type="primary", use_container_width=True):
+    if st.button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True):
         valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
         valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
         valid_df['วันที่'] = selected_date
@@ -239,11 +232,7 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
         if not valid_df.empty:
             st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
         
-        # 🛠️ ล้าง State การเปิดหน้าต่างและข้อมูลชั่วคราวทิ้งหลังบันทึกเสร็จ
         st.session_state.last_processed_state = None
-        if dialog_state_key in st.session_state:
-            del st.session_state[dialog_state_key]
-            
         save_all()
         st.rerun()
 
@@ -310,14 +299,16 @@ if menu == "📊 สรุปภาพรวม":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบ Modal Summary)
+# 📅 หน้า 2: ปฏิทินคิวงาน (แบบเรียบง่ายและเสถียร)
 # ------------------------------------------
 elif menu == "📅 ปฏิทินคิวงาน":
-    st.title("📅 ปฏิทินจัดคิวลงนิยาย")
-    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่ม/แก้ไขงาน โดยสามารถเพิ่มคิวงานกี่เรื่องก็ได้ในวันเดียวกันครับ")
+    st.title("📅 ปฏิทินจดคิวงาน")
+    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ ครับ")
     
-    unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else ["ยังไม่มีข้อมูลนิยาย"]
-    colors = ["#FF6C6C", "#6C9DFF", "#6CFF8A", "#FFC86C", "#D16CFF", "#6CFFD1", "#FF6CE3", "#C5FF6C", "#FF926C", "#6CA5FF"]
+    unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else []
+    
+    # โทนสีละมุนตาสำหรับป้ายชื่อเรื่องในปฏิทิน
+    colors = ["#fca5a5", "#93c5fd", "#86efac", "#fcd34d", "#d8b4fe", "#5eead4", "#f9a8d4", "#bef264", "#fdba74", "#94a3b8"]
     color_map = {novel: colors[i % len(colors)] for i, novel in enumerate(unique_novels)}
 
     events = []
@@ -330,9 +321,10 @@ elif menu == "📅 ปฏิทินคิวงาน":
             if date_val and date_val.lower() not in ['nan', 'nat', 'none', '']:
                 events.append({
                     "id": str(idx),
-                    "title": f"{chap} {novel_name}",
+                    "title": f"[{chap}] {novel_name}",
                     "start": date_val,
-                    "color": color_map.get(novel_name, "#6C63FF"),
+                    "color": color_map.get(novel_name, "#cbd5e1"),
+                    "textColor": "#1e293b",
                     "allDay": True
                 })
     
@@ -345,7 +337,9 @@ elif menu == "📅 ปฏิทินคิวงาน":
         },
         "initialView": "dayGridMonth",
         "selectable": True,
-        "dayMaxEvents": 3,
+        "dayMaxEvents": 4, # ปรับให้แสดงได้ 4 งานก่อนจะซ่อนเป็น + เพิ่มเติม
+        "eventBorderColor": "transparent",
+        "eventDisplay": "block"
     }
     
     state = calendar(events=events, options=calendar_options, key="novel_calendar")
@@ -357,44 +351,21 @@ elif menu == "📅 ปฏิทินคิวงาน":
             if state["callback"] == "dateClick":
                 raw_date = state["dateClick"]["date"]
                 clicked_date = get_thai_date(raw_date)
-                daily_manager_dialog(clicked_date, unique_novels, current_state_str)
+                daily_manager_dialog(clicked_date, unique_novels)
                 
             elif state["callback"] == "eventClick":
                 raw_date = state["eventClick"]["event"]["start"]
                 clicked_date = get_thai_date(raw_date)
-                daily_manager_dialog(clicked_date, unique_novels, current_state_str)
+                daily_manager_dialog(clicked_date, unique_novels)
 
     st.markdown("---")
-    st.subheader("⚡ จัดการข้อมูลรวดเร็ว & ซิงค์ยอดงาน")
-    
-    col_sync, col_edit = st.columns([1, 2])
-    
-    with col_sync:
-        st.info("ระบบจะทำการอ่านเลขตอนสูงสุดจากปฏิทิน เพื่อนำไปอัปเดตยอด 'ตอนปัจจุบัน' ในฐานข้อมูลหลักให้โดยอัตโนมัติ")
-        if st.button("🔄 ซิงค์ยอดสะสม (Manual Sync)", type="primary", use_container_width=True):
-            for idx, b in enumerate(st.session_state.books_data):
-                novel = b['ชื่อเรื่อง']
-                cal_data = st.session_state.calendar_db[st.session_state.calendar_db['ชื่อเรื่อง'] == novel]
-                
-                if not cal_data.empty:
-                    max_c = 0
-                    for c in cal_data['ตอนที่']:
-                        m = parse_max_chapter(c)
-                        if m > max_c: 
-                            max_c = m
-                        
-                    if max_c > int(b.get('ตอนปัจจุบัน', 0)):
-                        st.session_state.books_data[idx]['ตอนปัจจุบัน'] = max_c
-            save_all()
-            st.success("✅ ซิงค์ยอดสะสมเข้าสู่ระบบหลักเรียบร้อยแล้ว!")
-            
-    with col_edit:
-        st.write("**ตารางจัดการด่วนรายเดือน (แก้ไขได้ทันที)**")
-        edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=200)
-        if st.button("💾 บันทึกตารางปฏิทิน"):
-            st.session_state.calendar_db = edited_cal
-            save_all()
-            st.rerun()
+    st.subheader("⚡ ตารางตรวจสอบรายเดือน")
+    st.write("ตารางสำหรับตรวจสอบความถูกต้องหรือลบข้อมูลอย่างรวดเร็ว")
+    edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=250)
+    if st.button("💾 บันทึกตาราง", type="secondary"):
+        st.session_state.calendar_db = edited_cal
+        save_all()
+        st.rerun()
 
 # ------------------------------------------
 # 📚 หน้า 3: จัดการนิยาย & ไฟล์
