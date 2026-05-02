@@ -118,7 +118,6 @@ def initialize_data():
         st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ หรือชื่อแผ่นงาน (Worksheets) ไม่ถูกต้อง ระบบได้ระงับการทำงานเพื่อป้องกันข้อมูลสูญหาย กรุณาตรวจสอบอินเทอร์เน็ตและชื่อ Sheet ให้ตรงกับคู่มือครับ")
         st.stop()
         
-    # จัดการข้อมูล Books
     books = b_df.to_dict('records')
     for b in books:
         def clean_str(val): 
@@ -144,19 +143,15 @@ def initialize_data():
         b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
     st.session_state.books_data = books
 
-    # จัดการข้อมูล Finance
     st.session_state.finance_db = f_df if not f_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
     
-    # จัดการข้อมูล Calendar
     st.session_state.calendar_db = c_df.dropna(subset=['วันที่']) if not c_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
     
-    # จัดการข้อมูล Settings
     if not s_df.empty:
         st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
     else:
         st.session_state.app_settings = {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
         
-    # จัดการข้อมูล ProgressLog
     st.session_state.progress_log_db = p_df if not p_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
 if 'books_data' not in st.session_state:
@@ -201,32 +196,38 @@ def parse_max_chapter(chap_str):
     return 0
 
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (Unlimited Events & Safe Reload)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (Fix: Dropdown Reset Issue)
 # ==========================================
 @st.dialog("📅 จัดการคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels, current_state):
     st.markdown(f"### 📌 ข้อมูลงานวันที่: {selected_date}")
     st.info("กดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่กี่เรื่องก็ได้ครับ")
     
-    day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
+    # 🛠️ Fix: ค้นหาข้อมูลและเก็บใน State ชั่วคราวเพื่อไม่ให้รีเซ็ตเมื่อ Dropdown เปลี่ยน
+    dialog_state_key = f"dialog_data_{selected_date}"
     
-    if day_events.empty:
-        day_events = pd.DataFrame([{'ชื่อเรื่อง': unique_novels[0] if unique_novels else "", 'ตอนที่': ''}])
-    else:
-        day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
+    if dialog_state_key not in st.session_state:
+        day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
+        if day_events.empty:
+            day_events = pd.DataFrame([{'ชื่อเรื่อง': unique_novels[0] if unique_novels else "", 'ตอนที่': ''}])
+        else:
+            day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
+        st.session_state[dialog_state_key] = day_events
 
-    dynamic_key = f"editor_{selected_date}_{int(datetime.now().timestamp())}"
-
+    # 🛠️ Fix: เปลี่ยน Key เป็นแบบคงที่โดยอิงกับวันที่ เพื่อไม่ให้ตารางสร้างใหม่ตลอดเวลา
     edited_df = st.data_editor(
-        day_events, 
+        st.session_state[dialog_state_key], 
         column_config={
             "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=unique_novels, required=True),
             "ตอนที่": st.column_config.TextColumn("ระบุตอนที่ (เช่น 1-10)", required=True)
         },
         num_rows="dynamic",
         use_container_width=True,
-        key=dynamic_key
+        key=f"editor_{selected_date}" 
     )
+    
+    # บันทึกค่าที่แก้ไขกลับเข้าไปใน State ชั่วคราว
+    st.session_state[dialog_state_key] = edited_df
     
     if st.button("💾 บันทึกการเปลี่ยนแปลง", type="primary", use_container_width=True):
         valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
@@ -238,7 +239,11 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
         if not valid_df.empty:
             st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
         
+        # 🛠️ ล้าง State การเปิดหน้าต่างและข้อมูลชั่วคราวทิ้งหลังบันทึกเสร็จ
         st.session_state.last_processed_state = None
+        if dialog_state_key in st.session_state:
+            del st.session_state[dialog_state_key]
+            
         save_all()
         st.rerun()
 
