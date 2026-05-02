@@ -193,48 +193,68 @@ def save_all():
         st.error(f"Error saving: {e}")
 
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (เรียบง่ายและปลอดภัย)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (แบบเสถียรและป้องกัน Error)
 # ==========================================
 @st.dialog("📅 บันทึกคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels):
     st.markdown(f"**ตารางงานของวันที่:** `{selected_date}`")
     
-    # ดึงข้อมูลของวันนั้นๆ
+    # 1. ดึงข้อมูลและล้างข้อมูลทันทีเพื่อป้องกัน Error
     day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
     
+    # มั่นใจว่ามีตัวเลือกนิยาย
     options = unique_novels if unique_novels else ["ยังไม่มีข้อมูลนิยาย"]
 
     if day_events.empty:
         day_events = pd.DataFrame([{'ชื่อเรื่อง': options[0], 'ตอนที่': ''}])
     else:
+        # 🛠️ ส่วนสำคัญ: ล้างข้อมูลก่อนส่งเข้าตารางแก้ไข
         day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
-        # ป้องกันแอปดับกรณีชื่อเรื่องในฐานข้อมูลไม่ตรงกับรายการปัจจุบัน
+        # เปลี่ยนค่า NaN เป็นข้อความว่าง
+        day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].fillna(options[0])
+        day_events['ตอนที่'] = day_events['ตอนที่'].fillna("")
+        # แปลงเป็นข้อความเพื่อป้องกันตัวเลข (Number) ชนกับ (TextColumn)
+        day_events['ตอนที่'] = day_events['ตอนที่'].astype(str)
+        # ลบช่องว่างส่วนเกินที่อาจติดมาจาก Google Sheets
+        day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].astype(str).str.strip()
+        # กรองเฉพาะชื่อที่มีอยู่ในลิสต์เท่านั้น เพื่อป้องกัน Error: check_type_compatibilities
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
 
-    edited_df = st.data_editor(
-        day_events, 
-        column_config={
-            "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
-            "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป (เช่น 1-10)", required=True)
-        },
-        num_rows="dynamic",
-        use_container_width=True,
-        key=f"editor_{selected_date}"
-    )
-    
-    if st.button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True):
-        valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
-        valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
-        valid_df['วันที่'] = selected_date
+    try:
+        # 2. แสดงตารางแก้ไข
+        edited_df = st.data_editor(
+            day_events, 
+            column_config={
+                "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
+                "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป", required=True)
+            },
+            num_rows="dynamic",
+            use_container_width=True,
+            key=f"editor_stable_{selected_date}" 
+        )
         
-        st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
-        
-        if not valid_df.empty:
-            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
-        
-        st.session_state.last_processed_state = None
-        save_all()
-        st.rerun()
+        if st.button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True):
+            # ตรวจสอบความถูกต้องก่อนเซฟ
+            valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
+            valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
+            valid_df['วันที่'] = selected_date
+            
+            # อัปเดตข้อมูลเข้าฐานข้อมูลหลัก
+            st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
+            if not valid_df.empty:
+                st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
+            
+            st.session_state.last_processed_state = None
+            save_all()
+            st.rerun()
+
+    except Exception as e:
+        # หากเกิดปัญหาข้อมูลใน Sheet พังจริงๆ ให้มีปุ่มรีเซ็ต
+        st.error("พบข้อมูลที่ไม่เข้าพวกในไฟล์ Excel กรุณากดปุ่มล้างข้อมูลด้านล่างเพื่อเริ่มใหม่")
+        if st.button("🗑️ ล้างและรีเซ็ตข้อมูลวันนี้"):
+            st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
+            save_all()
+            st.rerun()
 
 # ==========================================
 # 📱 3. ระบบนำทาง (Sidebar)
@@ -337,7 +357,7 @@ elif menu == "📅 ปฏิทินคิวงาน":
         },
         "initialView": "dayGridMonth",
         "selectable": True,
-        "dayMaxEvents": 4, # ปรับให้แสดงได้ 4 งานก่อนจะซ่อนเป็น + เพิ่มเติม
+        "dayMaxEvents": 4, 
         "eventBorderColor": "transparent",
         "eventDisplay": "block"
     }
