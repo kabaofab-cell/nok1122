@@ -5,6 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 import json
 import plotly.express as px
 from datetime import datetime
+from streamlit_calendar import calendar # 🚀 เพิ่ม Library สำหรับทำปฏิทิน
 
 # ==========================================
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
@@ -49,14 +50,7 @@ st.markdown("""
     @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
     .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
     
-    .ai-main { background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%); border-left: 6px solid #6C63FF; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
-    
-    .progress-box { background: white; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #f0f4f8; height: 100%; }
-    .progress-box h4 { color: #475569; font-size: 1.1rem; margin-bottom: 15px; }
-    .progress-value { font-size: 2.5rem; font-weight: 700; }
-    .val-tong { color: #FF6584; }
-    .val-tao { color: #38bdf8; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -121,10 +115,17 @@ def load_progress_data():
     try: return conn.read(worksheet="ProgressLog", ttl=0)
     except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
+# 🚀 โหลดข้อมูลสำหรับปฏิทิน
+@st.cache_data(ttl=300)
+def load_calendar_data():
+    try: return conn.read(worksheet="Calendar", ttl=0)
+    except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+
 if 'books_data' not in st.session_state: st.session_state.books_data = load_admin_data()
 if 'finance_db' not in st.session_state: st.session_state.finance_db = load_finance_data()
 if 'app_settings' not in st.session_state: st.session_state.app_settings = load_settings()
 if 'progress_log_db' not in st.session_state: st.session_state.progress_log_db = load_progress_data()
+if 'calendar_db' not in st.session_state: st.session_state.calendar_db = load_calendar_data()
 
 def save_all():
     try:
@@ -147,6 +148,10 @@ def save_all():
         
         df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
         conn.update(worksheet="ProgressLog", data=df_prog)
+
+        # 🚀 บันทึกข้อมูลปฏิทิน
+        df_cal = st.session_state.calendar_db if not st.session_state.calendar_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+        conn.update(worksheet="Calendar", data=df_cal)
             
         st.cache_data.clear()
         st.toast("✅ บันทึกข้อมูลลงฐานข้อมูลเรียบร้อยแล้ว!")
@@ -159,6 +164,7 @@ st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight:
 
 menu_options = [
     "📊 สรุปภาพรวม", 
+    "📅 ปฏิทินคิวงาน", # 🚀 เพิ่มเมนูปฏิทิน
     "📚 จัดการนิยาย & ไฟล์", 
     "📝 บันทึกงานแปลรายวัน", 
     "💰 บัญชี & ค่าตอบแทน", 
@@ -202,7 +208,83 @@ if menu == "📊 สรุปภาพรวม":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📚 หน้า 2: จัดการนิยาย & ไฟล์
+# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบใหม่ล่าสุด)
+# ------------------------------------------
+elif menu == "📅 ปฏิทินคิวงาน":
+    st.title("📅 ปฏิทินจัดคิวลงนิยาย")
+    st.info("💡 คลิกที่ 'ตัวเลขวันที่' บนปฏิทิน หากต้องการบันทึกว่าวันนั้นอัพเรื่องไหนไปแล้วบ้างครับ")
+    
+    # ดึงรายชื่อนิยายมาทำเป็นตัวเลือก
+    unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else ["ยังไม่มีข้อมูลนิยาย"]
+    
+    # กำหนดชุดสีให้แต่ละเรื่องดูแตกต่างกันบนปฏิทิน
+    colors = ["#FF6C6C", "#6C9DFF", "#6CFF8A", "#FFC86C", "#D16CFF", "#6CFFD1", "#FF6CE3", "#C5FF6C", "#FF926C", "#6CA5FF"]
+    color_map = {novel: colors[i % len(colors)] for i, novel in enumerate(unique_novels)}
+
+    # ดึงข้อมูลจากฐานข้อมูลมาแสดงเป็น Event บนปฏิทิน
+    events = []
+    if not st.session_state.calendar_db.empty:
+        for _, row in st.session_state.calendar_db.iterrows():
+            novel_name = str(row.get('ชื่อเรื่อง', ''))
+            chap = str(row.get('ตอนที่', ''))
+            date_val = str(row.get('วันที่', ''))
+            
+            if date_val and date_val.lower() != 'nan':
+                events.append({
+                    "title": f"[{novel_name}] ตอนที่ {chap}",
+                    "start": date_val,
+                    "color": color_map.get(novel_name, "#6C63FF"),
+                    "allDay": True
+                })
+    
+    # ตั้งค่าหน้าตาปฏิทิน
+    calendar_options = {
+        "headerToolbar": {
+            "left": "prev,next today",
+            "center": "title",
+            "right": "dayGridMonth,timeGridWeek",
+        },
+        "initialView": "dayGridMonth",
+        "selectable": True,
+        "events": events
+    }
+    
+    # แสดงปฏิทินบนหน้าจอ
+    state = calendar(options=calendar_options, key="novel_calendar")
+    
+    # ตรวจจับการคลิกที่วันที่
+    if state.get("callback") == "dateClick":
+        clicked_date = state["dateClick"]["date"][:10] # ดึงมาเฉพาะ YYYY-MM-DD
+        
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown(f"<h3 style='color:#6C63FF;'>📌 เพิ่มงานวันที่: {clicked_date}</h3>", unsafe_allow_html=True)
+            with st.form("calendar_form"):
+                sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels)
+                chap_num = st.text_input("อัพถึงตอนที่ (เช่น 150 หรือ 150-155)")
+                
+                if st.form_submit_button("💾 บันทึกคิวงาน", type="primary", use_container_width=True):
+                    if sel_novel != "ยังไม่มีข้อมูลนิยาย" and chap_num:
+                        new_event = pd.DataFrame([{'วันที่': clicked_date, 'ชื่อเรื่อง': sel_novel, 'ตอนที่': chap_num}])
+                        st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, new_event], ignore_index=True)
+                        save_all()
+                        st.rerun()
+                    else:
+                        st.warning("กรุณากรอกข้อมูลให้ครบถ้วนครับ")
+                        
+    # ส่วนสำหรับลบหรือแก้ไขข้อมูลกรณีคีย์ผิดพลาด
+    with st.expander("🛠️ จัดการข้อมูลปฏิทินย้อนหลัง (แก้ไข/ลบ)"):
+        if not st.session_state.calendar_db.empty:
+            edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True)
+            if st.button("💾 บันทึกการแก้ไขปฏิทิน"):
+                st.session_state.calendar_db = edited_cal
+                save_all()
+                st.rerun()
+        else:
+            st.write("ยังไม่มีข้อมูลคิวงานในปฏิทินครับ")
+
+# ------------------------------------------
+# 📚 หน้า 3: จัดการนิยาย & ไฟล์
 # ------------------------------------------
 elif menu == "📚 จัดการนิยาย & ไฟล์":
     if st.session_state.selected_book_idx is not None:
@@ -296,7 +378,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     save_all(); st.rerun()
 
 # ------------------------------------------
-# 📝 หน้า 3: บันทึกงานแปลรายวัน
+# 📝 หน้า 4: บันทึกงานแปลรายวัน
 # ------------------------------------------
 elif menu == "📝 บันทึกงานแปลรายวัน":
     st.title("📝 บันทึกงานแปล & ความคืบหน้า")
@@ -347,7 +429,7 @@ elif menu == "📝 บันทึกงานแปลรายวัน":
         else: st.write("ยังไม่มีบันทึกความคืบหน้าครับ")
 
 # ------------------------------------------
-# 💰 หน้า 4: บัญชี & ค่าตอบแทน
+# 💰 หน้า 5: บัญชี & ค่าตอบแทน
 # ------------------------------------------
 elif menu == "💰 บัญชี & ค่าตอบแทน":
     st.title("💰 จัดการบัญชี & ส่วนแบ่ง (QC)")
@@ -394,7 +476,7 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
             st.dataframe(df_m[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# ⚙️ หน้า 5: ตั้งค่าระบบ
+# ⚙️ หน้า 6: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าหมวดหมู่และแพลตฟอร์ม")
