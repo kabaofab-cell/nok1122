@@ -303,19 +303,21 @@ elif menu == "📅 ปฏิทินคิวงาน":
     # 📌 ส่วนแสดงผลปฏิทิน
     state = calendar(options=calendar_options, key="novel_calendar")
     
-    # ตรวจจับการกดเพื่อเปิดหน้าต่างป๊อปอัป
-if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
-    current_state_str = str(state)
-    
-    if st.session_state.get("last_processed_state") != current_state_str:
-        if state["callback"] == "dateClick":
-            # แก้ไขจุดนี้: ดึงค่าวันที่ที่คลิกโดยตรงจากปฏิทิน ไม่ใช้คำสั่ง datetime.today()
-            clicked_date = state["dateClick"]["date"].split("T")[0] 
-            add_event_dialog(clicked_date, unique_novels, current_state_str)
+    # ตรวจจับการกดเพื่อเปิดหน้าต่างป๊อปอัป (แก้ไขจุดดึงข้อมูลวันที่เรียบร้อย)
+    if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
+        current_state_str = str(state)
+        
+        if st.session_state.get("last_processed_state") != current_state_str:
+            if state["callback"] == "dateClick":
+                # ดึงเฉพาะ YYYY-MM-DD โดยตัดตัว T (Time) ออก
+                raw_date = state["dateClick"]["date"]
+                clicked_date = raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]
+                add_event_dialog(clicked_date, unique_novels, current_state_str)
                 
             elif state["callback"] == "eventClick":
                 event_id = state["eventClick"]["event"]["id"]
-                event_date = state["eventClick"]["event"]["start"][:10]
+                raw_date = state["eventClick"]["event"]["start"]
+                event_date = raw_date.split("T")[0] if "T" in raw_date else raw_date[:10]
                 event_novel = state["eventClick"]["event"]["extendedProps"]["novel"]
                 event_chap = state["eventClick"]["event"]["extendedProps"]["chap"]
                 edit_event_dialog(event_id, event_date, event_novel, event_chap, unique_novels, current_state_str)
