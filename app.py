@@ -87,7 +87,6 @@ def load_admin_data():
             b['ภาพปก'] = clean_str(b.get('ภาพปก'))
             b['เรื่องย่อ'] = clean_str(b.get('เรื่องย่อ'))
             b['หมายเหตุ'] = clean_str(b.get('หมายเหตุ'))
-            b['ลิงก์ PDF'] = clean_str(b.get('ลิงก์ PDF')) # 🚀 รองรับระบบ Telegram
             
             for key in ['ลิงก์อ่าน', 'ลิงก์ต้นฉบับ']:
                 try: 
@@ -122,17 +121,10 @@ def load_progress_data():
     try: return conn.read(worksheet="ProgressLog", ttl=0)
     except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
-# 🚀 โหลดข้อมูลสิทธิ์การเข้าถึงสำหรับ Telegram
-@st.cache_data(ttl=300)
-def load_permissions_data():
-    try: return conn.read(worksheet="UserPermissions", ttl=0)
-    except: return pd.DataFrame(columns=['Telegram ID', 'ชื่อเรื่อง', 'สถานะ', 'หมายเหตุ'])
-
 if 'books_data' not in st.session_state: st.session_state.books_data = load_admin_data()
 if 'finance_db' not in st.session_state: st.session_state.finance_db = load_finance_data()
 if 'app_settings' not in st.session_state: st.session_state.app_settings = load_settings()
 if 'progress_log_db' not in st.session_state: st.session_state.progress_log_db = load_progress_data()
-if 'permissions_db' not in st.session_state: st.session_state.permissions_db = load_permissions_data()
 
 def save_all():
     try:
@@ -145,7 +137,7 @@ def save_all():
             books_to_save.append(temp)
         
         df_save = pd.DataFrame(books_to_save)
-        if df_save.empty: df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์ PDF', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
+        if df_save.empty: df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
         
         conn.update(worksheet="Books", data=df_save)
         conn.update(worksheet="Finance", data=st.session_state.finance_db)
@@ -155,9 +147,6 @@ def save_all():
         
         df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
         conn.update(worksheet="ProgressLog", data=df_prog)
-
-        df_perm = st.session_state.permissions_db if not st.session_state.permissions_db.empty else pd.DataFrame(columns=['Telegram ID', 'ชื่อเรื่อง', 'สถานะ', 'หมายเหตุ'])
-        conn.update(worksheet="UserPermissions", data=df_perm)
             
         st.cache_data.clear()
         st.toast("✅ บันทึกข้อมูลลงฐานข้อมูลเรียบร้อยแล้ว!")
@@ -171,7 +160,6 @@ st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight:
 menu_options = [
     "📊 สรุปภาพรวม", 
     "📚 จัดการนิยาย & ไฟล์", 
-    "🔑 จัดการสิทธิ์ลูกค้า",
     "📝 บันทึกงานแปลรายวัน", 
     "💰 บัญชี & ค่าตอบแทน", 
     "⚙️ ตั้งค่าระบบ"
@@ -247,13 +235,12 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
             e_curr = c_f5.number_input("แปลเสร็จแล้ว (ตอน)", value=int(b.get('ตอนปัจจุบัน',0)))
             
             e_cover = st.text_input("ลิงก์ภาพปก", value=b.get('ภาพปก',''))
-            e_pdf = st.text_input("📁 ลิงก์ PDF (สำหรับบอท Telegram ดึงไปเปิด)", value=b.get('ลิงก์ PDF',''), placeholder="เช่น https://cdn.cloudflare.com/files/story_01.pdf")
             e_synopsis = st.text_area("📔 เรื่องย่อ", value=b.get('เรื่องย่อ',''), height=100)
             
             sv_col, del_col = st.columns(2)
             if sv_col.button("💾 บันทึกข้อมูลนิยาย", type="primary", use_container_width=True):
                 st.session_state.books_data[idx].update({
-                    'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover, 'ลิงก์ PDF': e_pdf,
+                    'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover,
                     'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt, 'เรื่องย่อ': e_synopsis
                 })
                 save_all(); st.session_state.selected_book_idx = None; st.rerun()
@@ -277,7 +264,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     new_qc = c_new2.radio("ผู้ดูแล (QC)", ["ตอง", "ตาว"], horizontal=True)
                     if st.form_submit_button("เพิ่มนิยาย"):
                         if new_title:
-                            st.session_state.books_data.append({'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 'ตอนปัจจุบัน': 0, 'เป้าหมาย': 100, 'ภาพปก': new_cover, 'ลิงก์ PDF': '', 'เรื่องย่อ': '', 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []})
+                            st.session_state.books_data.append({'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 'ตอนปัจจุบัน': 0, 'เป้าหมาย': 100, 'ภาพปก': new_cover, 'เรื่องย่อ': '', 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []})
                             save_all(); st.rerun()
 
             for i in range(0, len(st.session_state.books_data), 6):
@@ -297,7 +284,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
             st.info("💡 แก้ไขสถานะและจำนวนตอนรวดเร็วผ่านตารางนี้ได้เลยครับ")
             if st.session_state.books_data:
                 df_quick = pd.DataFrame(st.session_state.books_data)
-                edit_cols = ['ชื่อเรื่อง', 'สถานะ', 'ตอนปัจจุบัน', 'ลิงก์ PDF']
+                edit_cols = ['ชื่อเรื่อง', 'สถานะ', 'ตอนปัจจุบัน']
                 edited_df = st.data_editor(
                     df_quick[edit_cols],
                     column_config={"สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True)},
@@ -309,39 +296,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     save_all(); st.rerun()
 
 # ------------------------------------------
-# 🔑 หน้า 3: จัดการสิทธิ์ลูกค้า (ใหม่ สำหรับ Telegram)
-# ------------------------------------------
-elif menu == "🔑 จัดการสิทธิ์ลูกค้า":
-    st.title("🔑 จัดการสิทธิ์เข้าอ่าน (Telegram Access)")
-    st.info("💡 เพิ่ม Telegram ID ของลูกค้าที่ซื้อนิยาย เพื่อให้ระบบบอทตรวจสอบสิทธิ์การเปิดไฟล์ PDF ครับ")
-    
-    with st.form("add_permission"):
-        col1, col2, col3 = st.columns(3)
-        p_id = col1.text_input("Telegram ID", placeholder="เช่น 123456789")
-        p_book = col2.selectbox("ชื่อเรื่องที่ให้อ่าน", [bk['ชื่อเรื่อง'] for bk in st.session_state.books_data] if st.session_state.books_data else ["ไม่มีข้อมูล"])
-        p_note = col3.text_input("หมายเหตุ (เช่น ชื่อลูกค้า/วันที่โอน)")
-        
-        if st.form_submit_button("➕ อนุมัติสิทธิ์", type="primary"):
-            if p_id and p_book != "ไม่มีข้อมูล":
-                new_perm = pd.DataFrame([{'Telegram ID': p_id.strip(), 'ชื่อเรื่อง': p_book, 'สถานะ': 'ใช้งานได้', 'หมายเหตุ': p_note}])
-                st.session_state.permissions_db = pd.concat([st.session_state.permissions_db, new_perm], ignore_index=True)
-                save_all(); st.rerun()
-            else: st.warning("กรุณาระบุ Telegram ID ครับ")
-
-    st.markdown("---")
-    st.subheader("📋 ฐานข้อมูลสิทธิ์ทั้งหมด")
-    if not st.session_state.permissions_db.empty:
-        edited_perms = st.data_editor(
-            st.session_state.permissions_db,
-            num_rows="dynamic", use_container_width=True,
-            column_config={"สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["ใช้งานได้", "ระงับสิทธิ์"])}
-        )
-        if st.button("💾 บันทึกการแก้ไขสิทธิ์"):
-            st.session_state.permissions_db = edited_perms; save_all(); st.rerun()
-    else: st.write("ยังไม่มีข้อมูลสิทธิ์การเข้าถึงครับ")
-
-# ------------------------------------------
-# 📝 หน้า 4: บันทึกงานแปลรายวัน
+# 📝 หน้า 3: บันทึกงานแปลรายวัน
 # ------------------------------------------
 elif menu == "📝 บันทึกงานแปลรายวัน":
     st.title("📝 บันทึกงานแปล & ความคืบหน้า")
@@ -392,7 +347,7 @@ elif menu == "📝 บันทึกงานแปลรายวัน":
         else: st.write("ยังไม่มีบันทึกความคืบหน้าครับ")
 
 # ------------------------------------------
-# 💰 หน้า 5: บัญชี & ค่าตอบแทน
+# 💰 หน้า 4: บัญชี & ค่าตอบแทน
 # ------------------------------------------
 elif menu == "💰 บัญชี & ค่าตอบแทน":
     st.title("💰 จัดการบัญชี & ส่วนแบ่ง (QC)")
@@ -439,7 +394,7 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
             st.dataframe(df_m[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# ⚙️ หน้า 6: ตั้งค่าระบบ
+# ⚙️ หน้า 5: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าหมวดหมู่และแพลตฟอร์ม")
