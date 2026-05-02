@@ -68,7 +68,6 @@ def safe_image(url, img_class="rank-img"):
     else: 
         st.markdown(f'<img src="https://via.placeholder.com/300x450?text=No+Cover" class="{img_class}">', unsafe_allow_html=True)
 
-# ฟังก์ชันปรับแก้เวลาให้เป็นเวลาประเทศไทยเสมอ
 def get_thai_date(raw_date_str):
     try:
         if "T" in str(raw_date_str):
@@ -212,46 +211,48 @@ def parse_max_chapter(chap_str):
     return 0
 
 # ==========================================
-# 🌟 ระบบป๊อปอัป (Dialog Functions) สำหรับปฏิทิน
+# 🌟 ระบบป๊อปอัป (Dialog Functions) แบบใหม่ (Daily Manager)
 # ==========================================
+@st.dialog("📅 จัดการคิวงานรายวัน")
+def daily_manager_dialog(selected_date, unique_novels, current_state):
+    st.markdown(f"### 📌 ข้อมูลงานวันที่: {selected_date}")
+    st.info("แก้ไขชื่อเรื่อง/ตอนที่ต้องการ หรือกดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่ได้ทันทีครับ")
+    
+    # ดึงข้อมูลเฉพาะวันที่เลือก
+    day_indices = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].index
+    day_events = st.session_state.calendar_db.loc[day_indices].copy()
+    
+    # หากวันนั้นว่างเปล่า ให้สร้างแถวเปล่ารอไว้ 1 แถวเพื่อความสะดวก
+    if day_events.empty:
+        day_events = pd.DataFrame([{'ชื่อเรื่อง': unique_novels[0] if unique_novels else "", 'ตอนที่': ''}])
+    else:
+        day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
 
-@st.dialog("📌 เพิ่มคิวงานใหม่")
-def add_event_dialog(clicked_date, unique_novels, current_state):
-    st.markdown(f"**กำหนดลงงานวันที่:** {clicked_date}")
+    # ใช้ data_editor ให้แก้ข้อมูลเป็นกลุ่ม (เพิ่ม/ลด/แก้ ในตารางเดียว)
+    edited_df = st.data_editor(
+        day_events, 
+        column_config={
+            "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=unique_novels, required=True),
+            "ตอนที่": st.column_config.TextColumn("ระบุตอนที่ (เช่น 1-10)", required=True)
+        },
+        num_rows="dynamic",
+        use_container_width=True,
+        key=f"edit_day_{selected_date}"
+    )
     
-    sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels)
-    chap_num = st.text_input("ระบุตอนที่ (เช่น 1-10 หรือ 150)")
-    
-    if st.button("💾 บันทึกคิวงาน", type="primary", use_container_width=True):
-        if sel_novel != "ยังไม่มีข้อมูลนิยาย" and chap_num:
-            new_event = pd.DataFrame([{'วันที่': clicked_date, 'ชื่อเรื่อง': sel_novel, 'ตอนที่': chap_num}])
-            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, new_event], ignore_index=True)
-            st.session_state.last_processed_state = current_state
-            save_all()
-            st.rerun()
-        else:
-            st.warning("กรุณากรอกข้อมูลให้ครบถ้วนครับ")
-
-@st.dialog("🛠️ แก้ไขหรือลบคิวงาน")
-def edit_event_dialog(event_id, event_date, original_novel, original_chap, unique_novels, current_state):
-    st.markdown(f"**วันที่:** {event_date}")
-    
-    default_index = unique_novels.index(original_novel) if original_novel in unique_novels else 0
-    sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels, index=default_index)
-    chap_num = st.text_input("ระบุตอนที่", value=original_chap)
-    
-    col1, col2 = st.columns(2)
-    if col1.button("💾 บันทึกการแก้ไข", type="primary", use_container_width=True):
-        idx = int(event_id)
-        st.session_state.calendar_db.at[idx, 'ชื่อเรื่อง'] = sel_novel
-        st.session_state.calendar_db.at[idx, 'ตอนที่'] = chap_num
-        st.session_state.last_processed_state = current_state
-        save_all()
-        st.rerun()
+    if st.button("💾 บันทึกการเปลี่ยนแปลง", type="primary", use_container_width=True):
+        # 1. คัดกรองข้อมูลที่กรอกสมบูรณ์
+        edited_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
+        edited_df = edited_df[edited_df['ตอนที่'].str.strip() != '']
+        edited_df['วันที่'] = selected_date
         
-    if col2.button("🗑️ ลบคิวงานนี้", use_container_width=True):
-        idx = int(event_id)
-        st.session_state.calendar_db = st.session_state.calendar_db.drop(idx).reset_index(drop=True)
+        # 2. ลบข้อมูลของวันเดิมออกจากระบบ
+        st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
+        
+        # 3. นำข้อมูลใหม่ต่อท้ายกลับเข้าไป
+        if not edited_df.empty:
+            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, edited_df], ignore_index=True)
+        
         st.session_state.last_processed_state = current_state
         save_all()
         st.rerun()
@@ -266,7 +267,7 @@ menu_options = [
     "📅 ปฏิทินคิวงาน", 
     "📚 จัดการนิยาย & ไฟล์", 
     "📝 บันทึกงานแปลรายวัน", 
-    "💰 บัญชี & ค่าตอบแทน", 
+    "💰 บัญชี", 
     "⚙️ ตั้งค่าระบบ"
 ]
 
@@ -318,11 +319,11 @@ if menu == "📊 สรุปภาพรวม":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบ Modal Popup + Auto-Sync)
+# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบ Modal Summary)
 # ------------------------------------------
 elif menu == "📅 ปฏิทินคิวงาน":
     st.title("📅 ปฏิทินจัดคิวลงนิยาย")
-    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มคิวงาน หรือคลิกที่แถบสีเพื่อแก้ไขข้อมูลครับ")
+    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่ม/แก้ไขงาน โดยสามารถเพิ่มคิวงานกี่เรื่องก็ได้ในวันเดียวกันครับ")
     
     unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else ["ยังไม่มีข้อมูลนิยาย"]
     colors = ["#FF6C6C", "#6C9DFF", "#6CFF8A", "#FFC86C", "#D16CFF", "#6CFFD1", "#FF6CE3", "#C5FF6C", "#FF926C", "#6CA5FF"]
@@ -341,15 +342,11 @@ elif menu == "📅 ปฏิทินคิวงาน":
                     "title": f"{chap} {novel_name}",
                     "start": date_val,
                     "color": color_map.get(novel_name, "#6C63FF"),
-                    "allDay": True,
-                    "extendedProps": {
-                        "novel": novel_name,
-                        "chap": chap
-                    }
+                    "allDay": True
                 })
     
     calendar_options = {
-        "timeZone": "Asia/Bangkok",
+        "timeZone": "Asia/Bangkok", # ล็อกเวลาให้เป็นประเทศไทย
         "headerToolbar": {
             "left": "prev,next today",
             "center": "title",
@@ -357,13 +354,14 @@ elif menu == "📅 ปฏิทินคิวงาน":
         },
         "initialView": "dayGridMonth",
         "selectable": True,
+        "dayMaxEvents": 3, # แสดงงานสูงสุด 3 งานต่อวัน หากเกินจะขึ้นปุ่ม "+ เพิ่มเติม"
         "events": events
     }
     
     # 📌 ส่วนแสดงผลปฏิทิน
     state = calendar(options=calendar_options, key="novel_calendar")
     
-    # ตรวจจับการกดเพื่อเปิดหน้าต่างป๊อปอัป
+    # ตรวจจับการกดเพื่อเปิดหน้าต่างสรุปงานรายวัน
     if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
         current_state_str = str(state)
         
@@ -371,15 +369,13 @@ elif menu == "📅 ปฏิทินคิวงาน":
             if state["callback"] == "dateClick":
                 raw_date = state["dateClick"]["date"]
                 clicked_date = get_thai_date(raw_date)
-                add_event_dialog(clicked_date, unique_novels, current_state_str)
+                daily_manager_dialog(clicked_date, unique_novels, current_state_str)
                 
             elif state["callback"] == "eventClick":
-                event_id = state["eventClick"]["event"]["id"]
                 raw_date = state["eventClick"]["event"]["start"]
-                event_date = get_thai_date(raw_date)
-                event_novel = state["eventClick"]["event"]["extendedProps"]["novel"]
-                event_chap = state["eventClick"]["event"]["extendedProps"]["chap"]
-                edit_event_dialog(event_id, event_date, event_novel, event_chap, unique_novels, current_state_str)
+                clicked_date = get_thai_date(raw_date)
+                # แม้จะคลิกที่แถบงาน ก็ให้เปิดหน้าต่างสรุปงานของวันนั้นขึ้นมา
+                daily_manager_dialog(clicked_date, unique_novels, current_state_str)
 
     st.markdown("---")
     st.subheader("⚡ จัดการข้อมูลรวดเร็ว & ซิงค์ยอดงาน")
@@ -406,7 +402,7 @@ elif menu == "📅 ปฏิทินคิวงาน":
             st.success("✅ ซิงค์ยอดสะสมเข้าสู่ระบบหลักเรียบร้อยแล้ว!")
             
     with col_edit:
-        st.write("**ตารางจัดการด่วน (แก้ไขได้ทันที)**")
+        st.write("**ตารางจัดการด่วนรายเดือน (แก้ไขได้ทันที)**")
         edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=200)
         if st.button("💾 บันทึกตารางปฏิทิน"):
             st.session_state.calendar_db = edited_cal
