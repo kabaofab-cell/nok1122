@@ -5,7 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 import json
 import plotly.express as px
 from datetime import datetime
-from streamlit_calendar import calendar # 🚀 เพิ่ม Library สำหรับทำปฏิทิน
+from streamlit_calendar import calendar
 
 # ==========================================
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
@@ -115,7 +115,6 @@ def load_progress_data():
     try: return conn.read(worksheet="ProgressLog", ttl=0)
     except: return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
-# 🚀 โหลดข้อมูลสำหรับปฏิทิน
 @st.cache_data(ttl=300)
 def load_calendar_data():
     try: return conn.read(worksheet="Calendar", ttl=0)
@@ -149,13 +148,59 @@ def save_all():
         df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
         conn.update(worksheet="ProgressLog", data=df_prog)
 
-        # 🚀 บันทึกข้อมูลปฏิทิน
         df_cal = st.session_state.calendar_db if not st.session_state.calendar_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
         conn.update(worksheet="Calendar", data=df_cal)
             
         st.cache_data.clear()
         st.toast("✅ บันทึกข้อมูลลงฐานข้อมูลเรียบร้อยแล้ว!")
     except Exception as e: st.error(f"Error saving: {e}")
+
+
+# ==========================================
+# 🌟 ระบบป๊อปอัป (Dialog Functions) สำหรับปฏิทิน
+# ==========================================
+
+@st.dialog("📌 เพิ่มคิวงานใหม่")
+def add_event_dialog(clicked_date, unique_novels, current_state):
+    st.markdown(f"**กำหนดลงงานวันที่:** {clicked_date}")
+    
+    sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels)
+    chap_num = st.text_input("อัพถึงตอนที่ (เช่น 150 หรือ 150-155)")
+    
+    if st.button("💾 บันทึกคิวงาน", type="primary", use_container_width=True):
+        if sel_novel != "ยังไม่มีข้อมูลนิยาย" and chap_num:
+            new_event = pd.DataFrame([{'วันที่': clicked_date, 'ชื่อเรื่อง': sel_novel, 'ตอนที่': chap_num}])
+            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, new_event], ignore_index=True)
+            st.session_state.last_processed_state = current_state # ป้องกันป๊อปอัปเด้งซ้ำ
+            save_all()
+            st.rerun()
+        else:
+            st.warning("กรุณากรอกข้อมูลให้ครบถ้วนครับ")
+
+@st.dialog("🛠️ แก้ไขหรือลบคิวงาน")
+def edit_event_dialog(event_id, event_date, original_novel, original_chap, unique_novels, current_state):
+    st.markdown(f"**วันที่:** {event_date}")
+    
+    default_index = unique_novels.index(original_novel) if original_novel in unique_novels else 0
+    sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels, index=default_index)
+    chap_num = st.text_input("อัพถึงตอนที่", value=original_chap)
+    
+    col1, col2 = st.columns(2)
+    if col1.button("💾 บันทึกการแก้ไข", type="primary", use_container_width=True):
+        idx = int(event_id)
+        st.session_state.calendar_db.at[idx, 'ชื่อเรื่อง'] = sel_novel
+        st.session_state.calendar_db.at[idx, 'ตอนที่'] = chap_num
+        st.session_state.last_processed_state = current_state
+        save_all()
+        st.rerun()
+        
+    if col2.button("🗑️ ลบคิวงานนี้", use_container_width=True):
+        idx = int(event_id)
+        st.session_state.calendar_db = st.session_state.calendar_db.drop(idx).reset_index(drop=True)
+        st.session_state.last_processed_state = current_state
+        save_all()
+        st.rerun()
+
 
 # ==========================================
 # 📱 3. ระบบนำทาง (Sidebar)
@@ -164,7 +209,7 @@ st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight:
 
 menu_options = [
     "📊 สรุปภาพรวม", 
-    "📅 ปฏิทินคิวงาน", # 🚀 เพิ่มเมนูปฏิทิน
+    "📅 ปฏิทินคิวงาน", 
     "📚 จัดการนิยาย & ไฟล์", 
     "📝 บันทึกงานแปลรายวัน", 
     "💰 บัญชี & ค่าตอบแทน", 
@@ -208,36 +253,36 @@ if menu == "📊 สรุปภาพรวม":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบใหม่ล่าสุด)
+# 📅 หน้า 2: ปฏิทินคิวงาน (ระบบ Modal Popup)
 # ------------------------------------------
 elif menu == "📅 ปฏิทินคิวงาน":
     st.title("📅 ปฏิทินจัดคิวลงนิยาย")
-    st.info("💡 คลิกที่ 'ตัวเลขวันที่' บนปฏิทิน หากต้องการบันทึกว่าวันนั้นอัพเรื่องไหนไปแล้วบ้างครับ")
+    st.info("💡 คลิกที่ 'ตัวเลขวันที่' เพื่อเพิ่มงาน หรือคลิกที่ 'แถบสีชื่อเรื่อง' เพื่อแก้ไขและลบครับ")
     
-    # ดึงรายชื่อนิยายมาทำเป็นตัวเลือก
     unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else ["ยังไม่มีข้อมูลนิยาย"]
-    
-    # กำหนดชุดสีให้แต่ละเรื่องดูแตกต่างกันบนปฏิทิน
     colors = ["#FF6C6C", "#6C9DFF", "#6CFF8A", "#FFC86C", "#D16CFF", "#6CFFD1", "#FF6CE3", "#C5FF6C", "#FF926C", "#6CA5FF"]
     color_map = {novel: colors[i % len(colors)] for i, novel in enumerate(unique_novels)}
 
-    # ดึงข้อมูลจากฐานข้อมูลมาแสดงเป็น Event บนปฏิทิน
     events = []
     if not st.session_state.calendar_db.empty:
-        for _, row in st.session_state.calendar_db.iterrows():
+        for idx, row in st.session_state.calendar_db.iterrows():
             novel_name = str(row.get('ชื่อเรื่อง', ''))
             chap = str(row.get('ตอนที่', ''))
             date_val = str(row.get('วันที่', ''))
             
             if date_val and date_val.lower() != 'nan':
                 events.append({
+                    "id": str(idx),
                     "title": f"[{novel_name}] ตอนที่ {chap}",
                     "start": date_val,
                     "color": color_map.get(novel_name, "#6C63FF"),
-                    "allDay": True
+                    "allDay": True,
+                    "extendedProps": {
+                        "novel": novel_name,
+                        "chap": chap
+                    }
                 })
     
-    # ตั้งค่าหน้าตาปฏิทิน
     calendar_options = {
         "headerToolbar": {
             "left": "prev,next today",
@@ -249,39 +294,26 @@ elif menu == "📅 ปฏิทินคิวงาน":
         "events": events
     }
     
-    # แสดงปฏิทินบนหน้าจอ
     state = calendar(options=calendar_options, key="novel_calendar")
     
-    # ตรวจจับการคลิกที่วันที่
-    if state.get("callback") == "dateClick":
-        clicked_date = state["dateClick"]["date"][:10] # ดึงมาเฉพาะ YYYY-MM-DD
+    # ตรวจจับการกดเพื่อเปิดหน้าต่างป๊อปอัป
+    if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
         
-        with st.sidebar:
-            st.markdown("---")
-            st.markdown(f"<h3 style='color:#6C63FF;'>📌 เพิ่มงานวันที่: {clicked_date}</h3>", unsafe_allow_html=True)
-            with st.form("calendar_form"):
-                sel_novel = st.selectbox("เลือกชื่อนิยาย", unique_novels)
-                chap_num = st.text_input("อัพถึงตอนที่ (เช่น 150 หรือ 150-155)")
+        current_state_str = str(state)
+        
+        # ป้องกันไม่ให้หน้าต่างเด้งซ้ำแบบไม่สิ้นสุดเมื่อเรารีเฟรชหน้าจอ
+        if st.session_state.get("last_processed_state") != current_state_str:
+            
+            if state["callback"] == "dateClick":
+                clicked_date = state["dateClick"]["date"][:10]
+                add_event_dialog(clicked_date, unique_novels, current_state_str)
                 
-                if st.form_submit_button("💾 บันทึกคิวงาน", type="primary", use_container_width=True):
-                    if sel_novel != "ยังไม่มีข้อมูลนิยาย" and chap_num:
-                        new_event = pd.DataFrame([{'วันที่': clicked_date, 'ชื่อเรื่อง': sel_novel, 'ตอนที่': chap_num}])
-                        st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, new_event], ignore_index=True)
-                        save_all()
-                        st.rerun()
-                    else:
-                        st.warning("กรุณากรอกข้อมูลให้ครบถ้วนครับ")
-                        
-    # ส่วนสำหรับลบหรือแก้ไขข้อมูลกรณีคีย์ผิดพลาด
-    with st.expander("🛠️ จัดการข้อมูลปฏิทินย้อนหลัง (แก้ไข/ลบ)"):
-        if not st.session_state.calendar_db.empty:
-            edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True)
-            if st.button("💾 บันทึกการแก้ไขปฏิทิน"):
-                st.session_state.calendar_db = edited_cal
-                save_all()
-                st.rerun()
-        else:
-            st.write("ยังไม่มีข้อมูลคิวงานในปฏิทินครับ")
+            elif state["callback"] == "eventClick":
+                event_id = state["eventClick"]["event"]["id"]
+                event_date = state["eventClick"]["event"]["start"][:10]
+                event_novel = state["eventClick"]["event"]["extendedProps"]["novel"]
+                event_chap = state["eventClick"]["event"]["extendedProps"]["chap"]
+                edit_event_dialog(event_id, event_date, event_novel, event_chap, unique_novels, current_state_str)
 
 # ------------------------------------------
 # 📚 หน้า 3: จัดการนิยาย & ไฟล์
