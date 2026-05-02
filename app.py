@@ -68,7 +68,6 @@ def safe_image(url, img_class="rank-img"):
     else: 
         st.markdown(f'<img src="https://via.placeholder.com/300x450?text=No+Cover" class="{img_class}">', unsafe_allow_html=True)
 
-# ฟังก์ชันปรับแก้เวลาประเทศไทย (Asia/Bangkok) อย่างสมบูรณ์
 def get_thai_date(raw_date_str):
     try:
         if "T" in str(raw_date_str):
@@ -83,7 +82,7 @@ def get_thai_date(raw_date_str):
         return str(raw_date_str)[:10]
 
 # ==========================================
-# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด
+# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด (ระบบป้องกันข้อมูลหาย)
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -101,77 +100,67 @@ def upload_to_imgbb(file):
             return None
 
 @st.cache_data(ttl=300)
-def load_admin_data():
+def fetch_all_google_sheets():
     try:
-        df_b = conn.read(worksheet="Books", ttl=0)
-        books = df_b.to_dict('records')
-        for b in books:
-            def clean_str(val): 
-                return str(val) if pd.notna(val) and str(val).lower() != 'nan' else ''
+        b_df = conn.read(worksheet="Books", ttl=0)
+        f_df = conn.read(worksheet="Finance", ttl=0)
+        c_df = conn.read(worksheet="Calendar", ttl=0)
+        s_df = conn.read(worksheet="Settings", ttl=0)
+        p_df = conn.read(worksheet="ProgressLog", ttl=0)
+        return b_df, f_df, c_df, s_df, p_df
+    except Exception as e:
+        return None, None, None, None, None
+
+def initialize_data():
+    b_df, f_df, c_df, s_df, p_df = fetch_all_google_sheets()
+    
+    if b_df is None:
+        st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ หรือชื่อแผ่นงาน (Worksheets) ไม่ถูกต้อง ระบบได้ระงับการทำงานเพื่อป้องกันข้อมูลสูญหาย กรุณาตรวจสอบอินเทอร์เน็ตและชื่อ Sheet ให้ตรงกับคู่มือครับ")
+        st.stop()
+        
+    # จัดการข้อมูล Books
+    books = b_df.to_dict('records')
+    for b in books:
+        def clean_str(val): 
+            return str(val) if pd.notna(val) and str(val).lower() != 'nan' else ''
+        
+        b['ภาพปก'] = clean_str(b.get('ภาพปก'))
+        b['เรื่องย่อ'] = clean_str(b.get('เรื่องย่อ'))
+        b['หมายเหตุ'] = clean_str(b.get('หมายเหตุ'))
+        
+        for key in ['ลิงก์อ่าน', 'ลิงก์ต้นฉบับ']:
+            try: 
+                l_data = b.get(key)
+                b[key] = json.loads(l_data) if pd.notna(l_data) and str(l_data).strip() not in ['', 'nan'] else []
+            except: 
+                b[key] = []
+            if not isinstance(b[key], list): 
+                b[key] = []
             
-            b['ภาพปก'] = clean_str(b.get('ภาพปก'))
-            b['เรื่องย่อ'] = clean_str(b.get('เรื่องย่อ'))
-            b['หมายเหตุ'] = clean_str(b.get('หมายเหตุ'))
-            
-            for key in ['ลิงก์อ่าน', 'ลิงก์ต้นฉบับ']:
-                try: 
-                    l_data = b.get(key)
-                    b[key] = json.loads(l_data) if pd.notna(l_data) and str(l_data).strip() not in ['', 'nan'] else []
-                except: 
-                    b[key] = []
-                if not isinstance(b[key], list): 
-                    b[key] = []
-                
-            b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
-            b['หมวดหมู่'] = b.get('หมวดหมู่', 'ทั่วไป')
-            b['QC'] = b.get('QC', 'ตอง')
-            b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
-            b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
-        return books
-    except: 
-        return []
+        b['สถานะ'] = b.get('สถานะ', 'กำลังอัปเดต')
+        b['หมวดหมู่'] = b.get('หมวดหมู่', 'ทั่วไป')
+        b['QC'] = b.get('QC', 'ตอง')
+        b['ตอนปัจจุบัน'] = int(b.get('ตอนปัจจุบัน', 0)) if pd.notna(b.get('ตอนปัจจุบัน')) else 0
+        b['เป้าหมาย'] = int(b.get('เป้าหมาย', 1)) if pd.notna(b.get('เป้าหมาย')) else 1
+    st.session_state.books_data = books
 
-@st.cache_data(ttl=300)
-def load_finance_data():
-    try: 
-        return conn.read(worksheet="Finance", ttl=0)
-    except: 
-        return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
+    # จัดการข้อมูล Finance
+    st.session_state.finance_db = f_df if not f_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
+    
+    # จัดการข้อมูล Calendar
+    st.session_state.calendar_db = c_df.dropna(subset=['วันที่']) if not c_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+    
+    # จัดการข้อมูล Settings
+    if not s_df.empty:
+        st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
+    else:
+        st.session_state.app_settings = {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
+        
+    # จัดการข้อมูล ProgressLog
+    st.session_state.progress_log_db = p_df if not p_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
-@st.cache_data(ttl=300)
-def load_settings():
-    try:
-        df_s = conn.read(worksheet="Settings", ttl=0)
-        return {"categories": df_s['categories'].dropna().tolist(), "platforms": df_s['platforms'].dropna().tolist()}
-    except:
-        return {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
-
-@st.cache_data(ttl=300)
-def load_progress_data():
-    try: 
-        return conn.read(worksheet="ProgressLog", ttl=0)
-    except: 
-        return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
-
-@st.cache_data(ttl=300)
-def load_calendar_data():
-    try: 
-        df = conn.read(worksheet="Calendar", ttl=0)
-        df = df.dropna(subset=['วันที่'])
-        return df
-    except: 
-        return pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
-
-if 'books_data' not in st.session_state: 
-    st.session_state.books_data = load_admin_data()
-if 'finance_db' not in st.session_state: 
-    st.session_state.finance_db = load_finance_data()
-if 'app_settings' not in st.session_state: 
-    st.session_state.app_settings = load_settings()
-if 'progress_log_db' not in st.session_state: 
-    st.session_state.progress_log_db = load_progress_data()
-if 'calendar_db' not in st.session_state: 
-    st.session_state.calendar_db = load_calendar_data()
+if 'books_data' not in st.session_state:
+    initialize_data()
 
 def save_all():
     try:
@@ -219,7 +208,6 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
     st.markdown(f"### 📌 ข้อมูลงานวันที่: {selected_date}")
     st.info("กดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่กี่เรื่องก็ได้ครับ")
     
-    # ดึงข้อมูลของวันนั้นๆ
     day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
     
     if day_events.empty:
@@ -227,7 +215,6 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
     else:
         day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
 
-    # การใช้ Timestamp ใน Key เพื่อบังคับให้ตารางรีเฟรชค่าใหม่เสมอ
     dynamic_key = f"editor_{selected_date}_{int(datetime.now().timestamp())}"
 
     edited_df = st.data_editor(
@@ -246,13 +233,11 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
         valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
         valid_df['วันที่'] = selected_date
         
-        # ล้างข้อมูลเดิมและเขียนทับด้วยข้อมูลทั้งหมดที่กรอกใหม่
         st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
         
         if not valid_df.empty:
             st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
         
-        # รีเซ็ตสถานะทันที เพื่อให้กดหน้าต่างเดิมซ้ำได้โดยไม่ติดบั๊ก
         st.session_state.last_processed_state = None
         save_all()
         st.rerun()
@@ -287,6 +272,7 @@ if menu == "📊 สรุปภาพรวม":
     
     if st.button("🔄 โหลดข้อมูลใหม่ (Clear Cache)", type="primary"): 
         st.cache_data.clear()
+        st.session_state.pop('books_data', None)
         st.rerun()
     
     total_books = len(st.session_state.books_data)
