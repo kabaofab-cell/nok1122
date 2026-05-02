@@ -5,3 +5,4 @@ plotly
 python-telegram-bot
 gspread
 oauth2client
+pip install streamlit-calendar
