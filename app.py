@@ -4,8 +4,7 @@ import requests
 from streamlit_gsheets import GSheetsConnection
 import json
 import plotly.express as px
-from datetime import datetime, timedelta
-import re
+from datetime import datetime
 from streamlit_calendar import calendar
 
 # ==========================================
@@ -16,7 +15,7 @@ IMGBB_API_KEY = "c2632e406b68246bd02423be8f9bf384"
 st.set_page_config(page_title="Nok-kaew Admin Pro", layout="wide", page_icon="💎")
 
 # ==========================================
-# 🎨 1. ตั้งค่าและดีไซน์ (Modern Premium UI)
+# 🎨 1. ตั้งค่าและดีไซน์ (Modern Soft UI & Smart Flex)
 # ==========================================
 if 'selected_book_idx' not in st.session_state: 
     st.session_state.selected_book_idx = None
@@ -29,7 +28,7 @@ st.markdown("""
         font-family: 'Kanit', sans-serif !important; 
     }
     
-    .stApp { background-color: #f8fafc; }
+    .stApp { background-color: #fcfcfd; }
     
     [data-testid="stSidebar"] { background-color: #ffffff; box-shadow: 4px 0 15px rgba(0,0,0,0.03); }
     [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1e293b !important; font-weight: 600 !important; font-size: 15px !important; }
@@ -42,12 +41,12 @@ st.markdown("""
     div[role="radiogroup"] > label { padding: 10px 20px; background: transparent; border-radius: 12px; transition: 0.3s ease; cursor: pointer; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background: rgba(108, 99, 255, 0.1); transform: translateX(5px); }
 
-    .stButton > button { border-radius: 25px; border: none; background: linear-gradient(135deg, #6C63FF 0%, #8A84FF 100%); color: white; font-weight: 500; transition: all 0.3s ease; }
-    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(108, 99, 255, 0.35); color: white; }
+    .stButton > button { border-radius: 20px; border: none; background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%); color: white; font-weight: 500; transition: all 0.3s ease; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(129, 140, 248, 0.35); color: white; }
     
     .metric-card { background: white; padding: 25px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; margin-bottom: 20px; border: 1px solid #e2e8f0; transition: 0.3s ease; }
     @media (prefers-color-scheme: dark) { .metric-card { background: #1e293b; border-color: #334155; } }
-    .metric-card h2 { color: #6C63FF; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
+    .metric-card h2 { color: #818cf8; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
     
     .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 20px; }
     @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
@@ -60,8 +59,14 @@ st.markdown("""
     .progress-box h4 { color: #475569; font-size: 1.1rem; margin-bottom: 15px; }
     @media (prefers-color-scheme: dark) { .progress-box h4 { color: #cbd5e1; } }
     .progress-value { font-size: 2.5rem; font-weight: 700; }
-    .val-tong { color: #FF6584; }
-    .val-tao { color: #38bdf8; }
+    .val-tong { color: #f87171; }
+    .val-tao { color: #60a5fa; }
+
+    /* Smart Flex Calendar CSS */
+    .fc-daygrid-day-frame { min-height: 110px !important; height: 100% !important; }
+    .fc-event { border-radius: 6px !important; border: none !important; padding: 2px 6px !important; font-weight: 400 !important; font-size: 0.85em !important; margin: 2px 0 !important; }
+    .fc-daygrid-day-number { font-size: 0.9em !important; color: #64748b !important; padding: 8px !important; text-decoration: none !important; }
+    .fc-daygrid-more-link { color: #818cf8 !important; font-weight: 500 !important; font-size: 0.85em !important; padding-left: 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,7 +90,7 @@ def get_thai_date(raw_date_str):
         return str(raw_date_str)[:10]
 
 # ==========================================
-# 💾 2. ระบบฐานข้อมูล & ฟังก์ชันอัปโหลด
+# 💾 2. ระบบฐานข้อมูล & โหลดข้อมูลอย่างปลอดภัย
 # ==========================================
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -118,7 +123,7 @@ def initialize_data():
     b_df, f_df, c_df, s_df, p_df = fetch_all_google_sheets()
     
     if b_df is None:
-        st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ หรือชื่อแผ่นงาน (Worksheets) ไม่ถูกต้อง ระบบได้ระงับการทำงานเพื่อป้องกันข้อมูลสูญหาย กรุณาตรวจสอบอินเทอร์เน็ตและชื่อ Sheet ให้ตรงกับคู่มือครับ")
+        st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ กรุณาตรวจสอบชื่อแผ่นงานให้ถูกต้อง")
         st.stop()
         
     books = b_df.to_dict('records')
@@ -148,7 +153,11 @@ def initialize_data():
 
     st.session_state.finance_db = f_df if not f_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
     
-    st.session_state.calendar_db = c_df.dropna(subset=['วันที่']) if not c_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+    # 🛠️ โหลดและล้างค่าว่างใน Calendar ทันที
+    if not c_df.empty:
+        st.session_state.calendar_db = c_df.dropna(how='all').dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
+    else:
+        st.session_state.calendar_db = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
     
     if not s_df.empty:
         st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
@@ -184,7 +193,12 @@ def save_all():
         df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
         conn.update(worksheet="ProgressLog", data=df_prog)
 
-        df_cal = st.session_state.calendar_db if not st.session_state.calendar_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+        # 🛠️ กรองแถวว่างทิ้งก่อนบันทึกลง Calendar
+        df_cal = st.session_state.calendar_db.copy()
+        if not df_cal.empty:
+            df_cal = df_cal.dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
+        else:
+            df_cal = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
         conn.update(worksheet="Calendar", data=df_cal)
             
         st.cache_data.clear()
@@ -193,40 +207,30 @@ def save_all():
         st.error(f"Error saving: {e}")
 
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (แบบเสถียรและป้องกัน Error)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (เสถียร 100%)
 # ==========================================
 @st.dialog("📅 บันทึกคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels):
     st.markdown(f"**ตารางงานของวันที่:** `{selected_date}`")
     
-    # 1. ดึงข้อมูลและล้างข้อมูลทันทีเพื่อป้องกัน Error
     day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
-    
-    # มั่นใจว่ามีตัวเลือกนิยาย
     options = unique_novels if unique_novels else ["ยังไม่มีข้อมูลนิยาย"]
 
     if day_events.empty:
         day_events = pd.DataFrame([{'ชื่อเรื่อง': options[0], 'ตอนที่': ''}])
     else:
-        # 🛠️ ส่วนสำคัญ: ล้างข้อมูลก่อนส่งเข้าตารางแก้ไข
         day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
-        # เปลี่ยนค่า NaN เป็นข้อความว่าง
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].fillna(options[0])
-        day_events['ตอนที่'] = day_events['ตอนที่'].fillna("")
-        # แปลงเป็นข้อความเพื่อป้องกันตัวเลข (Number) ชนกับ (TextColumn)
-        day_events['ตอนที่'] = day_events['ตอนที่'].astype(str)
-        # ลบช่องว่างส่วนเกินที่อาจติดมาจาก Google Sheets
+        day_events['ตอนที่'] = day_events['ตอนที่'].fillna("").astype(str)
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].astype(str).str.strip()
-        # กรองเฉพาะชื่อที่มีอยู่ในลิสต์เท่านั้น เพื่อป้องกัน Error: check_type_compatibilities
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
 
     try:
-        # 2. แสดงตารางแก้ไข
         edited_df = st.data_editor(
             day_events, 
             column_config={
                 "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
-                "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป", required=True)
+                "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป", required=False) # อนุญาตให้เว้นว่างได้เวลาพิมพ์
             },
             num_rows="dynamic",
             use_container_width=True,
@@ -234,12 +238,11 @@ def daily_manager_dialog(selected_date, unique_novels):
         )
         
         if st.button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True):
-            # ตรวจสอบความถูกต้องก่อนเซฟ
-            valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
-            valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
+            # กรองเฉพาะแถวที่มีชื่อเรื่อง
+            valid_df = edited_df.dropna(subset=['ชื่อเรื่อง'])
+            valid_df = valid_df[valid_df['ชื่อเรื่อง'].astype(str).str.strip() != '']
             valid_df['วันที่'] = selected_date
             
-            # อัปเดตข้อมูลเข้าฐานข้อมูลหลัก
             st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
             if not valid_df.empty:
                 st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
@@ -249,9 +252,8 @@ def daily_manager_dialog(selected_date, unique_novels):
             st.rerun()
 
     except Exception as e:
-        # หากเกิดปัญหาข้อมูลใน Sheet พังจริงๆ ให้มีปุ่มรีเซ็ต
-        st.error("พบข้อมูลที่ไม่เข้าพวกในไฟล์ Excel กรุณากดปุ่มล้างข้อมูลด้านล่างเพื่อเริ่มใหม่")
-        if st.button("🗑️ ล้างและรีเซ็ตข้อมูลวันนี้"):
+        st.error("พบข้อมูลขัดข้องในระบบ กรุณากดปุ่มเพื่อรีเซ็ตงานของวันนี้")
+        if st.button("🗑️ ล้างข้อมูลและเริ่มใหม่"):
             st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
             save_all()
             st.rerun()
@@ -259,7 +261,7 @@ def daily_manager_dialog(selected_date, unique_novels):
 # ==========================================
 # 📱 3. ระบบนำทาง (Sidebar)
 # ==========================================
-st.sidebar.markdown("<h2 style='text-align: center; color: #6C63FF; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='text-align: center; color: #818cf8; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
 
 menu_options = [
     "📊 สรุปภาพรวม", 
@@ -304,7 +306,7 @@ if menu == "📊 สรุปภาพรวม":
     with col3: 
         st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books}</h2></div>", unsafe_allow_html=True)
     with col4: 
-        st.markdown(f"<div class='metric-card'><h3>💰 ยอดสุทธิรวม</h3><h2 style='color:#6C63FF;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><h3>💰 ยอดสุทธิรวม</h3><h2 style='color:#818cf8;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
 
     c_c1, c_c2 = st.columns(2)
     with c_c1:
@@ -319,15 +321,15 @@ if menu == "📊 สรุปภาพรวม":
             st.plotly_chart(fig_plat, use_container_width=True)
 
 # ------------------------------------------
-# 📅 หน้า 2: ปฏิทินคิวงาน (แบบเรียบง่ายและเสถียร)
+# 📅 หน้า 2: ปฏิทินคิวงาน (Smart Flex)
 # ------------------------------------------
 elif menu == "📅 ปฏิทินคิวงาน":
     st.title("📅 ปฏิทินจดคิวงาน")
-    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ ครับ")
+    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ (ระบบรองรับงานจำนวนมากโดยไม่ทำให้ตารางเสียทรง)")
     
     unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else []
     
-    # โทนสีละมุนตาสำหรับป้ายชื่อเรื่องในปฏิทิน
+    # โทนสีละมุนตาสำหรับป้ายชื่อเรื่อง
     colors = ["#fca5a5", "#93c5fd", "#86efac", "#fcd34d", "#d8b4fe", "#5eead4", "#f9a8d4", "#bef264", "#fdba74", "#94a3b8"]
     color_map = {novel: colors[i % len(colors)] for i, novel in enumerate(unique_novels)}
 
@@ -336,18 +338,23 @@ elif menu == "📅 ปฏิทินคิวงาน":
         for idx, row in st.session_state.calendar_db.iterrows():
             novel_name = str(row.get('ชื่อเรื่อง', ''))
             chap = str(row.get('ตอนที่', ''))
-            date_val = str(row.get('วันที่', '')).split(" ")[0][:10]
+            
+            # การดึงวันที่อย่างปลอดภัย
+            raw_date = str(row.get('วันที่', ''))
+            date_val = raw_date.split(" ")[0][:10] if raw_date else ""
             
             if date_val and date_val.lower() not in ['nan', 'nat', 'none', '']:
+                display_title = f"[{chap}] {novel_name}" if chap and chap.lower() != 'nan' else novel_name
                 events.append({
                     "id": str(idx),
-                    "title": f"[{chap}] {novel_name}",
+                    "title": display_title,
                     "start": date_val,
                     "color": color_map.get(novel_name, "#cbd5e1"),
                     "textColor": "#1e293b",
                     "allDay": True
                 })
     
+    # 🛠️ ตั้งค่า Smart Flex Calendar
     calendar_options = {
         "timeZone": "Asia/Bangkok",
         "headerToolbar": {
@@ -357,12 +364,15 @@ elif menu == "📅 ปฏิทินคิวงาน":
         },
         "initialView": "dayGridMonth",
         "selectable": True,
-        "dayMaxEvents": 4, 
-        "eventBorderColor": "transparent",
+        "height": "auto",            # ขยายความสูงตามเนื้อหา
+        "contentHeight": "auto",
+        "aspectRatio": 1.5,          # สัดส่วนความกว้างต่อความสูงที่พอดี
+        "dayMaxEvents": True,        # ยุบงานที่ล้นเป็น pop-over (+ more)
+        "expandRows": True,
         "eventDisplay": "block"
     }
     
-    state = calendar(events=events, options=calendar_options, key="novel_calendar")
+    state = calendar(events=events, options=calendar_options, key="novel_calendar_smart")
     
     if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
         current_state_str = str(state)
@@ -380,9 +390,9 @@ elif menu == "📅 ปฏิทินคิวงาน":
 
     st.markdown("---")
     st.subheader("⚡ ตารางตรวจสอบรายเดือน")
-    st.write("ตารางสำหรับตรวจสอบความถูกต้องหรือลบข้อมูลอย่างรวดเร็ว")
+    st.write("ตารางสำหรับตรวจสอบความถูกต้องหรือลบข้อมูลอย่างรวดเร็ว (อัปเดตอัตโนมัติ)")
     edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=250)
-    if st.button("💾 บันทึกตาราง", type="secondary"):
+    if st.button("💾 บันทึกตารางส่วนนี้", type="secondary"):
         st.session_state.calendar_db = edited_cal
         save_all()
         st.rerun()
@@ -557,7 +567,7 @@ elif menu == "📝 บันทึกงานแปลรายวัน":
             with c2: 
                 st.markdown(f"<div class='progress-box'><h4>💙 ตาว (เดือนนี้)</h4><div class='progress-value val-tao'>{int(tao_m)}</div></div>", unsafe_allow_html=True)
             with c3: 
-                st.markdown(f"<div class='progress-box'><h4>🌍 รวมทีม (เดือนนี้)</h4><div class='progress-value' style='color:#6C63FF;'>{int(tong_m + tao_m)}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='progress-box'><h4>🌍 รวมทีม (เดือนนี้)</h4><div class='progress-value' style='color:#818cf8;'>{int(tong_m + tao_m)}</div></div>", unsafe_allow_html=True)
             
             st.dataframe(df_prog.sort_values(by='วันที่', ascending=False), use_container_width=True)
         else: 
@@ -613,8 +623,8 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
             df_m = df_merge[df_merge['เดือน-ปี'] == sel_month]
             
             col_t, col_a, col_all = st.columns(3)
-            col_t.markdown(f"<div class='metric-card'><h3 style='color:#FF6584;'>💖 ยอดของ ตอง</h3><h2>฿{df_m[df_m['QC']=='ตอง']['ยอดสุทธิ'].sum():,.2f}</h2></div>", unsafe_allow_html=True)
-            col_a.markdown(f"<div class='metric-card'><h3 style='color:#38bdf8;'>💙 ยอดของ ตาว</h3><h2>฿{df_m[df_m['QC']=='ตาว']['ยอดสุทธิ'].sum():,.2f}</h2></div>", unsafe_allow_html=True)
+            col_t.markdown(f"<div class='metric-card'><h3 style='color:#f87171;'>💖 ยอดของ ตอง</h3><h2>฿{df_m[df_m['QC']=='ตอง']['ยอดสุทธิ'].sum():,.2f}</h2></div>", unsafe_allow_html=True)
+            col_a.markdown(f"<div class='metric-card'><h3 style='color:#60a5fa;'>💙 ยอดของ ตาว</h3><h2>฿{df_m[df_m['QC']=='ตาว']['ยอดสุทธิ'].sum():,.2f}</h2></div>", unsafe_allow_html=True)
             col_all.markdown(f"<div class='metric-card'><h3>🌍 รวมสุทธิ</h3><h2>฿{df_m['ยอดสุทธิ'].sum():,.2f}</h2></div>", unsafe_allow_html=True)
             
             st.dataframe(df_m[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
