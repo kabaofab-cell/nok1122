@@ -325,9 +325,9 @@ elif menu == "📅 ปฏิทินคิวงาน":
         for idx, row in st.session_state.calendar_db.iterrows():
             novel_name = str(row.get('ชื่อเรื่อง', ''))
             chap = str(row.get('ตอนที่', ''))
-            date_val = str(row.get('วันที่', ''))
+            date_val = str(row.get('วันที่', '')).split(" ")[0][:10]
             
-            if date_val and date_val.lower() != 'nan':
+            if date_val and date_val.lower() not in ['nan', 'nat', 'none', '']:
                 events.append({
                     "id": str(idx),
                     "title": f"{chap} {novel_name}",
@@ -346,10 +346,9 @@ elif menu == "📅 ปฏิทินคิวงาน":
         "initialView": "dayGridMonth",
         "selectable": True,
         "dayMaxEvents": 3,
-        "events": events
     }
     
-    state = calendar(options=calendar_options, key="novel_calendar")
+    state = calendar(events=events, options=calendar_options, key="novel_calendar")
     
     if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
         current_state_str = str(state)
