@@ -68,6 +68,7 @@ def safe_image(url, img_class="rank-img"):
     else: 
         st.markdown(f'<img src="https://via.placeholder.com/300x450?text=No+Cover" class="{img_class}">', unsafe_allow_html=True)
 
+# ฟังก์ชันปรับแก้เวลาประเทศไทย (Asia/Bangkok) อย่างสมบูรณ์
 def get_thai_date(raw_date_str):
     try:
         if "T" in str(raw_date_str):
@@ -211,24 +212,24 @@ def parse_max_chapter(chap_str):
     return 0
 
 # ==========================================
-# 🌟 ระบบป๊อปอัป (Dialog Functions) แบบใหม่ (Daily Manager)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (Unlimited Events & Safe Reload)
 # ==========================================
 @st.dialog("📅 จัดการคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels, current_state):
     st.markdown(f"### 📌 ข้อมูลงานวันที่: {selected_date}")
-    st.info("แก้ไขชื่อเรื่อง/ตอนที่ต้องการ หรือกดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่ได้ทันทีครับ")
+    st.info("กดเครื่องหมาย ➕ ด้านล่างตารางเพื่อเพิ่มงานใหม่กี่เรื่องก็ได้ครับ")
     
-    # ดึงข้อมูลเฉพาะวันที่เลือก
-    day_indices = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].index
-    day_events = st.session_state.calendar_db.loc[day_indices].copy()
+    # ดึงข้อมูลของวันนั้นๆ
+    day_events = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] == selected_date].copy()
     
-    # หากวันนั้นว่างเปล่า ให้สร้างแถวเปล่ารอไว้ 1 แถวเพื่อความสะดวก
     if day_events.empty:
         day_events = pd.DataFrame([{'ชื่อเรื่อง': unique_novels[0] if unique_novels else "", 'ตอนที่': ''}])
     else:
         day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
 
-    # ใช้ data_editor ให้แก้ข้อมูลเป็นกลุ่ม (เพิ่ม/ลด/แก้ ในตารางเดียว)
+    # การใช้ Timestamp ใน Key เพื่อบังคับให้ตารางรีเฟรชค่าใหม่เสมอ
+    dynamic_key = f"editor_{selected_date}_{int(datetime.now().timestamp())}"
+
     edited_df = st.data_editor(
         day_events, 
         column_config={
@@ -237,23 +238,22 @@ def daily_manager_dialog(selected_date, unique_novels, current_state):
         },
         num_rows="dynamic",
         use_container_width=True,
-        key=f"edit_day_{selected_date}"
+        key=dynamic_key
     )
     
     if st.button("💾 บันทึกการเปลี่ยนแปลง", type="primary", use_container_width=True):
-        # 1. คัดกรองข้อมูลที่กรอกสมบูรณ์
-        edited_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
-        edited_df = edited_df[edited_df['ตอนที่'].str.strip() != '']
-        edited_df['วันที่'] = selected_date
+        valid_df = edited_df.dropna(subset=['ชื่อเรื่อง', 'ตอนที่'])
+        valid_df = valid_df[valid_df['ตอนที่'].astype(str).str.strip() != '']
+        valid_df['วันที่'] = selected_date
         
-        # 2. ลบข้อมูลของวันเดิมออกจากระบบ
+        # ล้างข้อมูลเดิมและเขียนทับด้วยข้อมูลทั้งหมดที่กรอกใหม่
         st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
         
-        # 3. นำข้อมูลใหม่ต่อท้ายกลับเข้าไป
-        if not edited_df.empty:
-            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, edited_df], ignore_index=True)
+        if not valid_df.empty:
+            st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
         
-        st.session_state.last_processed_state = current_state
+        # รีเซ็ตสถานะทันที เพื่อให้กดหน้าต่างเดิมซ้ำได้โดยไม่ติดบั๊ก
+        st.session_state.last_processed_state = None
         save_all()
         st.rerun()
 
@@ -267,7 +267,7 @@ menu_options = [
     "📅 ปฏิทินคิวงาน", 
     "📚 จัดการนิยาย & ไฟล์", 
     "📝 บันทึกงานแปลรายวัน", 
-    "💰 บัญชี", 
+    "💰 บัญชี & ค่าตอบแทน", 
     "⚙️ ตั้งค่าระบบ"
 ]
 
@@ -346,7 +346,7 @@ elif menu == "📅 ปฏิทินคิวงาน":
                 })
     
     calendar_options = {
-        "timeZone": "Asia/Bangkok", # ล็อกเวลาให้เป็นประเทศไทย
+        "timeZone": "Asia/Bangkok",
         "headerToolbar": {
             "left": "prev,next today",
             "center": "title",
@@ -354,14 +354,12 @@ elif menu == "📅 ปฏิทินคิวงาน":
         },
         "initialView": "dayGridMonth",
         "selectable": True,
-        "dayMaxEvents": 3, # แสดงงานสูงสุด 3 งานต่อวัน หากเกินจะขึ้นปุ่ม "+ เพิ่มเติม"
+        "dayMaxEvents": 3,
         "events": events
     }
     
-    # 📌 ส่วนแสดงผลปฏิทิน
     state = calendar(options=calendar_options, key="novel_calendar")
     
-    # ตรวจจับการกดเพื่อเปิดหน้าต่างสรุปงานรายวัน
     if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
         current_state_str = str(state)
         
@@ -374,7 +372,6 @@ elif menu == "📅 ปฏิทินคิวงาน":
             elif state["callback"] == "eventClick":
                 raw_date = state["eventClick"]["event"]["start"]
                 clicked_date = get_thai_date(raw_date)
-                # แม้จะคลิกที่แถบงาน ก็ให้เปิดหน้าต่างสรุปงานของวันนั้นขึ้นมา
                 daily_manager_dialog(clicked_date, unique_novels, current_state_str)
 
     st.markdown("---")
