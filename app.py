@@ -304,13 +304,14 @@ elif menu == "📅 ปฏิทินคิวงาน":
     state = calendar(options=calendar_options, key="novel_calendar")
     
     # ตรวจจับการกดเพื่อเปิดหน้าต่างป๊อปอัป
-    if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
-        current_state_str = str(state)
-        
-        if st.session_state.get("last_processed_state") != current_state_str:
-            if state["callback"] == "dateClick":
-                clicked_date = state["dateClick"]["date"][:10]
-                add_event_dialog(clicked_date, unique_novels, current_state_str)
+if state is not None and state.get("callback") in ["dateClick", "eventClick"]:
+    current_state_str = str(state)
+    
+    if st.session_state.get("last_processed_state") != current_state_str:
+        if state["callback"] == "dateClick":
+            # แก้ไขจุดนี้: ดึงค่าวันที่ที่คลิกโดยตรงจากปฏิทิน ไม่ใช้คำสั่ง datetime.today()
+            clicked_date = state["dateClick"]["date"].split("T")[0] 
+            add_event_dialog(clicked_date, unique_novels, current_state_str)
                 
             elif state["callback"] == "eventClick":
                 event_id = state["eventClick"]["event"]["id"]
