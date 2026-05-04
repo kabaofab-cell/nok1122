@@ -153,7 +153,6 @@ def initialize_data():
 
     st.session_state.finance_db = f_df if not f_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
     
-    # 🛠️ โหลดและล้างค่าว่างใน Calendar ทันที
     if not c_df.empty:
         st.session_state.calendar_db = c_df.dropna(how='all').dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
     else:
@@ -171,6 +170,11 @@ if 'books_data' not in st.session_state:
 
 def save_all():
     try:
+        # ระบบป้องกันขั้นสุดยอด: ป้องกันการบันทึกทับด้วยค่าว่างหากเกิดบั๊ก
+        if not isinstance(st.session_state.books_data, list):
+            st.error("🚨 ข้อมูลหนังสือเสียหาย ระบบยกเลิกการบันทึกเพื่อป้องกันไฟล์หาย!")
+            return
+            
         books_to_save = []
         for b in st.session_state.books_data:
             temp = b.copy()
@@ -193,7 +197,6 @@ def save_all():
         df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
         conn.update(worksheet="ProgressLog", data=df_prog)
 
-        # 🛠️ กรองแถวว่างทิ้งก่อนบันทึกลง Calendar
         df_cal = st.session_state.calendar_db.copy()
         if not df_cal.empty:
             df_cal = df_cal.dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
@@ -207,7 +210,7 @@ def save_all():
         st.error(f"Error saving: {e}")
 
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (เสถียร 100%)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (อุดช่องโหว่พิมพ์ค้าง)
 # ==========================================
 @st.dialog("📅 บันทึกคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels):
@@ -222,34 +225,35 @@ def daily_manager_dialog(selected_date, unique_novels):
         day_events = day_events[['ชื่อเรื่อง', 'ตอนที่']]
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].fillna(options[0])
         day_events['ตอนที่'] = day_events['ตอนที่'].fillna("").astype(str)
-        day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].astype(str).str.strip()
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
 
     try:
-        edited_df = st.data_editor(
-            day_events, 
-            column_config={
-                "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
-                "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป", required=False) # อนุญาตให้เว้นว่างได้เวลาพิมพ์
-            },
-            num_rows="dynamic",
-            use_container_width=True,
-            key=f"editor_stable_{selected_date}" 
-        )
-        
-        if st.button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True):
-            # กรองเฉพาะแถวที่มีชื่อเรื่อง
-            valid_df = edited_df.dropna(subset=['ชื่อเรื่อง'])
-            valid_df = valid_df[valid_df['ชื่อเรื่อง'].astype(str).str.strip() != '']
-            valid_df['วันที่'] = selected_date
+        # ใช้ Form เพื่อบังคับให้ Streamlit บันทึกสถานะการพิมพ์ก่อนรันคำสั่ง Save
+        with st.form(key=f"form_stable_{selected_date}"):
+            edited_df = st.data_editor(
+                day_events, 
+                column_config={
+                    "ชื่อเรื่อง": st.column_config.SelectboxColumn("ชื่อเรื่อง", options=options, required=True),
+                    "ตอนที่": st.column_config.TextColumn("ช่วงตอนที่อัป", required=False)
+                },
+                num_rows="dynamic",
+                use_container_width=True
+            )
             
-            st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
-            if not valid_df.empty:
-                st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
+            submitted = st.form_submit_button("💾 บันทึกตารางคิวงาน", type="primary", use_container_width=True)
             
-            st.session_state.last_processed_state = None
-            save_all()
-            st.rerun()
+            if submitted:
+                valid_df = edited_df.dropna(subset=['ชื่อเรื่อง'])
+                valid_df = valid_df[valid_df['ชื่อเรื่อง'].astype(str).str.strip() != '']
+                valid_df['วันที่'] = selected_date
+                
+                st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
+                if not valid_df.empty:
+                    st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
+                
+                st.session_state.last_processed_state = None
+                save_all()
+                st.rerun()
 
     except Exception as e:
         st.error("พบข้อมูลขัดข้องในระบบ กรุณากดปุ่มเพื่อรีเซ็ตงานของวันนี้")
@@ -320,6 +324,38 @@ if menu == "📊 สรุปภาพรวม":
             fig_plat.update_layout(font_family="Kanit", showlegend=False)
             st.plotly_chart(fig_plat, use_container_width=True)
 
+    # --- ส่วนที่เพิ่มเข้ามาใหม่: 10 อันดับนิยายขายดีประจำเดือน ---
+    st.markdown("---")
+    st.subheader("🏆 10 อันดับนิยายขายดีประจำเดือน")
+    if not df_finance.empty:
+        df_finance['เดือน-ปี'] = pd.to_datetime(df_finance['วันที่']).dt.strftime('%Y-%m')
+        avail_months = sorted(df_finance['เดือน-ปี'].dropna().unique(), reverse=True)
+        
+        if avail_months:
+            selected_dash_month = st.selectbox("📌 เลือกเดือนที่ต้องการดูยอดขาย", avail_months, key="dash_month_selector")
+            df_month = df_finance[df_finance['เดือน-ปี'] == selected_dash_month]
+            
+            if not df_month.empty:
+                df_month['ยอดสุทธิ'] = pd.to_numeric(df_month['ยอดสุทธิ'], errors='coerce').fillna(0)
+                top10 = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().reset_index()
+                top10 = top10.sort_values(by='ยอดสุทธิ', ascending=False).head(10)
+                top10.index = range(1, len(top10) + 1)
+                
+                dash_c1, dash_c2 = st.columns([1, 2])
+                with dash_c1:
+                    st.dataframe(top10.style.format({"ยอดสุทธิ": "฿{:,.2f}"}), use_container_width=True)
+                with dash_c2:
+                    fig_top10 = px.bar(
+                        top10, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', 
+                        title=f"Top 10 Bestsellers ({selected_dash_month})", 
+                        text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale="Purp"
+                    )
+                    fig_top10.update_traces(texttemplate='฿%{text:,.0f}', textposition='outside')
+                    fig_top10.update_layout(yaxis={'categoryorder':'total ascending'}, font_family="Kanit", coloraxis_showscale=False)
+                    st.plotly_chart(fig_top10, use_container_width=True)
+            else:
+                st.info("ไม่มีข้อมูลยอดขายในเดือนที่เลือก")
+
 # ------------------------------------------
 # 📅 หน้า 2: ปฏิทินคิวงาน (Smart Flex)
 # ------------------------------------------
@@ -329,7 +365,6 @@ elif menu == "📅 ปฏิทินคิวงาน":
     
     unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else []
     
-    # โทนสีละมุนตาสำหรับป้ายชื่อเรื่อง
     colors = ["#fca5a5", "#93c5fd", "#86efac", "#fcd34d", "#d8b4fe", "#5eead4", "#f9a8d4", "#bef264", "#fdba74", "#94a3b8"]
     color_map = {novel: colors[i % len(colors)] for i, novel in enumerate(unique_novels)}
 
@@ -339,7 +374,6 @@ elif menu == "📅 ปฏิทินคิวงาน":
             novel_name = str(row.get('ชื่อเรื่อง', ''))
             chap = str(row.get('ตอนที่', ''))
             
-            # การดึงวันที่อย่างปลอดภัย
             raw_date = str(row.get('วันที่', ''))
             date_val = raw_date.split(" ")[0][:10] if raw_date else ""
             
@@ -354,20 +388,15 @@ elif menu == "📅 ปฏิทินคิวงาน":
                     "allDay": True
                 })
     
-    # 🛠️ ตั้งค่า Smart Flex Calendar
     calendar_options = {
         "timeZone": "Asia/Bangkok",
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,timeGridWeek",
-        },
+        "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,timeGridWeek"},
         "initialView": "dayGridMonth",
         "selectable": True,
-        "height": "auto",            # ขยายความสูงตามเนื้อหา
+        "height": "auto",
         "contentHeight": "auto",
-        "aspectRatio": 1.5,          # สัดส่วนความกว้างต่อความสูงที่พอดี
-        "dayMaxEvents": True,        # ยุบงานที่ล้นเป็น pop-over (+ more)
+        "aspectRatio": 1.5,
+        "dayMaxEvents": True,
         "expandRows": True,
         "eventDisplay": "block"
     }
@@ -461,7 +490,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
 
     else:
         st.title("📚 จัดการนิยาย & ไฟล์")
-        tab1, tab2 = st.tabs(["🖼️ แกลลอรี่นิยาย", "⚡ แก้ไขข้อมูลด่วน (ตาราง)"])
+        tab1, tab2 = st.tabs(["🖼️ แกลลอรี่นิยาย (10 เรื่องล่าสุด)", "⚡ แก้ไขข้อมูลด่วน (ตาราง 10 แถวล่าสุด)"])
         
         with tab1:
             with st.expander("✨ เพิ่มนิยายเรื่องใหม่"):
@@ -478,36 +507,46 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                             save_all()
                             st.rerun()
 
-            for i in range(0, len(st.session_state.books_data), 6):
-                cols = st.columns(6)
+            # แสดงผลนิยาย 10 เรื่องล่าสุด (เรียงจากใหม่ไปเก่า)
+            books_with_idx = [{'data': b, 'orig_idx': idx} for idx, b in enumerate(st.session_state.books_data)]
+            latest_10_books = books_with_idx[::-1][:10]
+            
+            for i in range(0, len(latest_10_books), 5):
+                cols = st.columns(5)
                 for j, col in enumerate(cols):
-                    if i + j < len(st.session_state.books_data):
-                        b = st.session_state.books_data[i+j]
-                        b['_orig_idx'] = i+j
+                    if i + j < len(latest_10_books):
+                        item = latest_10_books[i+j]
+                        b = item['data']
+                        real_idx = item['orig_idx']
+                        
                         with col:
                             img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450"
                             card = f"<div class='rank-card'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450';\"><div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
                             st.markdown(card.replace('\n',''), unsafe_allow_html=True)
                             
-                            if st.button("✏️ แก้ไข", key=f"edit_{b['_orig_idx']}", use_container_width=True):
-                                st.session_state.selected_book_idx = b['_orig_idx']
+                            if st.button("✏️ แก้ไข", key=f"edit_{real_idx}", use_container_width=True):
+                                st.session_state.selected_book_idx = real_idx
                                 st.rerun()
                                 
         with tab2:
-            st.info("💡 แก้ไขสถานะและจำนวนตอนรวดเร็วผ่านตารางนี้ได้เลยครับ")
+            st.info("💡 แก้ไขสถานะและจำนวนตอนรวดเร็วผ่านตารางนี้ (แสดงผลเฉพาะ 10 เรื่องล่าสุด)")
             if st.session_state.books_data:
                 df_quick = pd.DataFrame(st.session_state.books_data)
+                df_quick['_orig_idx'] = df_quick.index
+                df_show = df_quick.iloc[::-1].head(10).copy() # เรียงใหม่ไปเก่า และเอาแค่ 10 แถว
+                
                 edit_cols = ['ชื่อเรื่อง', 'สถานะ', 'ตอนปัจจุบัน']
                 edited_df = st.data_editor(
-                    df_quick[edit_cols],
+                    df_show[edit_cols],
                     column_config={"สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True)},
                     use_container_width=True, num_rows="fixed", height=400
                 )
                 
                 if st.button("💾 บันทึกตาราง", type="primary"):
                     for i in range(len(edited_df)):
+                        real_idx = df_show.iloc[i]['_orig_idx']
                         for col in edit_cols: 
-                            st.session_state.books_data[i][col] = edited_df.iloc[i][col]
+                            st.session_state.books_data[real_idx][col] = edited_df.iloc[i][col]
                     save_all()
                     st.rerun()
 
@@ -615,7 +654,18 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
 
     with tab3:
         if not st.session_state.finance_db.empty:
-            df_merge = pd.merge(st.session_state.finance_db, pd.DataFrame(st.session_state.books_data)[['ชื่อเรื่อง', 'QC']], on='ชื่อเรื่อง', how='left')
+            df_fin = st.session_state.finance_db.copy()
+            df_books = pd.DataFrame(st.session_state.books_data)
+            
+            # การป้องกัน KeyError ขั้นเด็ดขาด หากฐานข้อมูลหนังสือเกิดว่างเปล่าชั่วคราว
+            if df_books.empty:
+                df_books = pd.DataFrame(columns=['ชื่อเรื่อง', 'QC'])
+            elif 'ชื่อเรื่อง' not in df_books.columns or 'QC' not in df_books.columns:
+                for col in ['ชื่อเรื่อง', 'QC']:
+                    if col not in df_books.columns:
+                        df_books[col] = ''
+                        
+            df_merge = pd.merge(df_fin, df_books[['ชื่อเรื่อง', 'QC']], on='ชื่อเรื่อง', how='left')
             df_merge['ยอดสุทธิ'] = pd.to_numeric(df_merge['ยอดสุทธิ']).fillna(0)
             df_merge['เดือน-ปี'] = pd.to_datetime(df_merge['วันที่']).dt.strftime('%Y-%m')
             
