@@ -48,9 +48,9 @@ st.markdown("""
     @media (prefers-color-scheme: dark) { .metric-card { background: #1e293b; border-color: #334155; } }
     .metric-card h2 { color: #818cf8; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
     
-    .rank-card { background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+    .rank-card { background: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 20px; }
     @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
-    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 12px; }
+    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 8px; }
     
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
     
@@ -170,9 +170,9 @@ if 'books_data' not in st.session_state:
 
 def save_all():
     try:
-        # ระบบป้องกันขั้นสุดยอด: ป้องกันการบันทึกทับด้วยค่าว่างหากเกิดบั๊ก
-        if not isinstance(st.session_state.books_data, list):
-            st.error("🚨 ข้อมูลหนังสือเสียหาย ระบบยกเลิกการบันทึกเพื่อป้องกันไฟล์หาย!")
+        # ระบบป้องกันขั้นสูง: เช็กว่าข้อมูลใน session_state พร้อมบันทึกหรือไม่
+        if 'books_data' not in st.session_state or not isinstance(st.session_state.books_data, list):
+            st.error("🚨 ข้อมูลในระบบเสียหาย ระบบยกเลิกการบันทึกเพื่อป้องกันไฟล์หาย!")
             return
             
         books_to_save = []
@@ -185,6 +185,7 @@ def save_all():
             books_to_save.append(temp)
         
         df_save = pd.DataFrame(books_to_save)
+        # ตรวจสอบเพิ่มเติม หากดึงข้อมูลแล้วว่างเปล่า จะสร้างหัวตารางเตรียมไว้
         if df_save.empty: 
             df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
         
@@ -210,7 +211,7 @@ def save_all():
         st.error(f"Error saving: {e}")
 
 # ==========================================
-# 🌟 ระบบป๊อปอัปจัดการรายวัน (อุดช่องโหว่พิมพ์ค้าง)
+# 🌟 ระบบป๊อปอัปจัดการรายวัน (อุดช่องโหว่พิมพ์ค้างด้วย Form)
 # ==========================================
 @st.dialog("📅 บันทึกคิวงานรายวัน")
 def daily_manager_dialog(selected_date, unique_novels):
@@ -228,7 +229,7 @@ def daily_manager_dialog(selected_date, unique_novels):
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
 
     try:
-        # ใช้ Form เพื่อบังคับให้ Streamlit บันทึกสถานะการพิมพ์ก่อนรันคำสั่ง Save
+        # ใช้ st.form เพื่อบังคับให้ระบบอ่านค่าที่พิมพ์ค้างไว้ทั้งหมดก่อนกด Submit
         with st.form(key=f"form_stable_{selected_date}"):
             edited_df = st.data_editor(
                 day_events, 
@@ -247,6 +248,7 @@ def daily_manager_dialog(selected_date, unique_novels):
                 valid_df = valid_df[valid_df['ชื่อเรื่อง'].astype(str).str.strip() != '']
                 valid_df['วันที่'] = selected_date
                 
+                # ลบข้อมูลเก่าของวันนี้ทิ้ง แล้วนำข้อมูลใหม่จาก Form ใส่แทน
                 st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
                 if not valid_df.empty:
                     st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
@@ -490,7 +492,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
 
     else:
         st.title("📚 จัดการนิยาย & ไฟล์")
-        tab1, tab2 = st.tabs(["🖼️ แกลลอรี่นิยาย (10 เรื่องล่าสุด)", "⚡ แก้ไขข้อมูลด่วน (ตาราง 10 แถวล่าสุด)"])
+        tab1, tab2 = st.tabs(["🖼️ แกลลอรี่นิยาย (ทั้งหมด)", "⚡ แก้ไขข้อมูลด่วน (ตาราง)"])
         
         with tab1:
             with st.expander("✨ เพิ่มนิยายเรื่องใหม่"):
@@ -507,39 +509,44 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                             save_all()
                             st.rerun()
 
-            # แสดงผลนิยาย 10 เรื่องล่าสุด (เรียงจากใหม่ไปเก่า)
+            # แสดงผลนิยาย "ทั้งหมด" โดยแบ่งเป็นแถวละ 10 คอลัมน์ (เรียงเรื่องใหม่ไว้บนสุด)
             books_with_idx = [{'data': b, 'orig_idx': idx} for idx, b in enumerate(st.session_state.books_data)]
-            latest_10_books = books_with_idx[::-1][:10]
+            all_books = books_with_idx[::-1] 
             
-            for i in range(0, len(latest_10_books), 5):
-                cols = st.columns(5)
+            for i in range(0, len(all_books), 10):
+                cols = st.columns(10)
                 for j, col in enumerate(cols):
-                    if i + j < len(latest_10_books):
-                        item = latest_10_books[i+j]
+                    if i + j < len(all_books):
+                        item = all_books[i+j]
                         b = item['data']
                         real_idx = item['orig_idx']
                         
                         with col:
                             img_url = b.get('ภาพปก') if b.get('ภาพปก') and str(b.get('ภาพปก')).strip() != "" else "https://via.placeholder.com/300x450"
-                            card = f"<div class='rank-card'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450';\"><div style='font-size:13px; font-weight:600; line-height:1.3; margin-bottom:5px; height:35px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
+                            card = f"<div class='rank-card' style='padding: 8px;'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450';\"><div style='font-size:11px; font-weight:600; line-height:1.2; margin-bottom:5px; height:28px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
                             st.markdown(card.replace('\n',''), unsafe_allow_html=True)
                             
-                            if st.button("✏️ แก้ไข", key=f"edit_{real_idx}", use_container_width=True):
+                            if st.button("✏️", key=f"edit_{real_idx}", use_container_width=True):
                                 st.session_state.selected_book_idx = real_idx
                                 st.rerun()
                                 
         with tab2:
-            st.info("💡 แก้ไขสถานะและจำนวนตอนรวดเร็วผ่านตารางนี้ (แสดงผลเฉพาะ 10 เรื่องล่าสุด)")
+            st.info("💡 แก้ไขหมวดหมู่ สถานะ จำนวนตอน และ QC รวดเร็วผ่านตารางนี้ (แสดงผลทั้งหมด)")
             if st.session_state.books_data:
                 df_quick = pd.DataFrame(st.session_state.books_data)
                 df_quick['_orig_idx'] = df_quick.index
-                df_show = df_quick.iloc[::-1].head(10).copy() # เรียงใหม่ไปเก่า และเอาแค่ 10 แถว
+                df_show = df_quick.iloc[::-1].copy() # โชว์ทั้งหมด เรียงจากใหม่ไปเก่า
                 
-                edit_cols = ['ชื่อเรื่อง', 'สถานะ', 'ตอนปัจจุบัน']
+                edit_cols = ['ชื่อเรื่อง', 'หมวดหมู่', 'สถานะ', 'ตอนปัจจุบัน', 'QC']
+                
                 edited_df = st.data_editor(
                     df_show[edit_cols],
-                    column_config={"สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True)},
-                    use_container_width=True, num_rows="fixed", height=400
+                    column_config={
+                        "หมวดหมู่": st.column_config.SelectboxColumn("หมวดหมู่", options=st.session_state.app_settings['categories'], required=True),
+                        "สถานะ": st.column_config.SelectboxColumn("สถานะ", options=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], required=True),
+                        "QC": st.column_config.SelectboxColumn("QC", options=["ตอง", "ตาว"], required=True)
+                    },
+                    use_container_width=True, num_rows="fixed", height=500
                 )
                 
                 if st.button("💾 บันทึกตาราง", type="primary"):
@@ -657,7 +664,6 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
             df_fin = st.session_state.finance_db.copy()
             df_books = pd.DataFrame(st.session_state.books_data)
             
-            # การป้องกัน KeyError ขั้นเด็ดขาด หากฐานข้อมูลหนังสือเกิดว่างเปล่าชั่วคราว
             if df_books.empty:
                 df_books = pd.DataFrame(columns=['ชื่อเรื่อง', 'QC'])
             elif 'ชื่อเรื่อง' not in df_books.columns or 'QC' not in df_books.columns:
