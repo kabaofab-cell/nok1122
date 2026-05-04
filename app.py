@@ -54,14 +54,6 @@ st.markdown("""
     
     .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
     
-    .progress-box { background: white; border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; height: 100%; }
-    @media (prefers-color-scheme: dark) { .progress-box { background: #1e293b; border-color: #334155; } }
-    .progress-box h4 { color: #475569; font-size: 1.1rem; margin-bottom: 15px; }
-    @media (prefers-color-scheme: dark) { .progress-box h4 { color: #cbd5e1; } }
-    .progress-value { font-size: 2.5rem; font-weight: 700; }
-    .val-tong { color: #f87171; }
-    .val-tao { color: #60a5fa; }
-
     /* Smart Flex Calendar CSS */
     .fc-daygrid-day-frame { min-height: 110px !important; height: 100% !important; }
     .fc-event { border-radius: 6px !important; border: none !important; padding: 2px 6px !important; font-weight: 400 !important; font-size: 0.85em !important; margin: 2px 0 !important; }
@@ -114,13 +106,12 @@ def fetch_all_google_sheets():
         f_df = conn.read(worksheet="Finance", ttl=0)
         c_df = conn.read(worksheet="Calendar", ttl=0)
         s_df = conn.read(worksheet="Settings", ttl=0)
-        p_df = conn.read(worksheet="ProgressLog", ttl=0)
-        return b_df, f_df, c_df, s_df, p_df
+        return b_df, f_df, c_df, s_df
     except Exception as e:
-        return None, None, None, None, None
+        return None, None, None, None
 
 def initialize_data():
-    b_df, f_df, c_df, s_df, p_df = fetch_all_google_sheets()
+    b_df, f_df, c_df, s_df = fetch_all_google_sheets()
     
     if b_df is None:
         st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ กรุณาตรวจสอบชื่อแผ่นงานให้ถูกต้อง")
@@ -162,51 +153,50 @@ def initialize_data():
         st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
     else:
         st.session_state.app_settings = {"categories": ["นิยายรัก", "แฟนตาซี", "นิยายวาย (BL)", "ทั่วไป"], "platforms": ["ReadToon", "KAIREW", "Facebook", "Meb", "Dek-D"]}
-        
-    st.session_state.progress_log_db = p_df if not p_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
 
 if 'books_data' not in st.session_state:
     initialize_data()
 
-def save_all():
+# ==========================================
+# 🚀 ระบบบันทึกข้อมูลความเร็วสูง (Targeted Save)
+# ==========================================
+def save_data(sheets_to_save):
+    """ส่งข้อมูลเฉพาะแผ่นงานที่มีการอัปเดต เพื่อลดระยะเวลาการบันทึกข้อมูล"""
     try:
-        # ระบบป้องกันขั้นสูง: เช็กว่าข้อมูลใน session_state พร้อมบันทึกหรือไม่
-        if 'books_data' not in st.session_state or not isinstance(st.session_state.books_data, list):
-            st.error("🚨 ข้อมูลในระบบเสียหาย ระบบยกเลิกการบันทึกเพื่อป้องกันไฟล์หาย!")
-            return
-            
-        books_to_save = []
-        for b in st.session_state.books_data:
-            temp = b.copy()
-            if '_orig_idx' in temp: 
-                del temp['_orig_idx']
-            temp['ลิงก์อ่าน'] = json.dumps(b.get('ลิงก์อ่าน', []))
-            temp['ลิงก์ต้นฉบับ'] = json.dumps(b.get('ลิงก์ต้นฉบับ', []))
-            books_to_save.append(temp)
-        
-        df_save = pd.DataFrame(books_to_save)
-        # ตรวจสอบเพิ่มเติม หากดึงข้อมูลแล้วว่างเปล่า จะสร้างหัวตารางเตรียมไว้
-        if df_save.empty: 
-            df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
-        
-        conn.update(worksheet="Books", data=df_save)
-        conn.update(worksheet="Finance", data=st.session_state.finance_db)
-        
-        set_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
-        conn.update(worksheet="Settings", data=set_df)
-        
-        df_prog = st.session_state.progress_log_db if not st.session_state.progress_log_db.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'QC', 'จำนวนตอนที่เพิ่ม'])
-        conn.update(worksheet="ProgressLog", data=df_prog)
+        if "Books" in sheets_to_save:
+            if 'books_data' not in st.session_state or not isinstance(st.session_state.books_data, list):
+                st.error("🚨 ข้อมูลหนังสือเสียหาย ระบบยกเลิกการบันทึกเพื่อป้องกันไฟล์หาย!")
+                return
+            books_to_save = []
+            for b in st.session_state.books_data:
+                temp = b.copy()
+                if '_orig_idx' in temp: 
+                    del temp['_orig_idx']
+                temp['ลิงก์อ่าน'] = json.dumps(b.get('ลิงก์อ่าน', []))
+                temp['ลิงก์ต้นฉบับ'] = json.dumps(b.get('ลิงก์ต้นฉบับ', []))
+                books_to_save.append(temp)
+            df_save = pd.DataFrame(books_to_save)
+            if df_save.empty: 
+                df_save = pd.DataFrame(columns=['ชื่อเรื่อง', 'หมวดหมู่', 'QC', 'สถานะ', 'ตอนปัจจุบัน', 'เป้าหมาย', 'ภาพปก', 'เรื่องย่อ', 'หมายเหตุ', 'ลิงก์อ่าน', 'ลิงก์ต้นฉบับ'])
+            conn.update(worksheet="Books", data=df_save)
 
-        df_cal = st.session_state.calendar_db.copy()
-        if not df_cal.empty:
-            df_cal = df_cal.dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
-        else:
-            df_cal = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
-        conn.update(worksheet="Calendar", data=df_cal)
+        if "Finance" in sheets_to_save:
+            conn.update(worksheet="Finance", data=st.session_state.finance_db)
+
+        if "Calendar" in sheets_to_save:
+            df_cal = st.session_state.calendar_db.copy()
+            if not df_cal.empty:
+                df_cal = df_cal.dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
+            else:
+                df_cal = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+            conn.update(worksheet="Calendar", data=df_cal)
+
+        if "Settings" in sheets_to_save:
+            set_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
+            conn.update(worksheet="Settings", data=set_df)
             
         st.cache_data.clear()
-        st.toast("✅ บันทึกข้อมูลลงฐานข้อมูลเรียบร้อยแล้ว!")
+        st.toast(f"✅ บันทึกข้อมูลเรียบร้อยแล้ว!")
     except Exception as e: 
         st.error(f"Error saving: {e}")
 
@@ -229,7 +219,6 @@ def daily_manager_dialog(selected_date, unique_novels):
         day_events['ชื่อเรื่อง'] = day_events['ชื่อเรื่อง'].apply(lambda x: x if x in options else options[0])
 
     try:
-        # ใช้ st.form เพื่อบังคับให้ระบบอ่านค่าที่พิมพ์ค้างไว้ทั้งหมดก่อนกด Submit
         with st.form(key=f"form_stable_{selected_date}"):
             edited_df = st.data_editor(
                 day_events, 
@@ -248,20 +237,19 @@ def daily_manager_dialog(selected_date, unique_novels):
                 valid_df = valid_df[valid_df['ชื่อเรื่อง'].astype(str).str.strip() != '']
                 valid_df['วันที่'] = selected_date
                 
-                # ลบข้อมูลเก่าของวันนี้ทิ้ง แล้วนำข้อมูลใหม่จาก Form ใส่แทน
                 st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
                 if not valid_df.empty:
                     st.session_state.calendar_db = pd.concat([st.session_state.calendar_db, valid_df], ignore_index=True)
                 
                 st.session_state.last_processed_state = None
-                save_all()
+                save_data(["Calendar"]) # บันทึกเฉพาะปฏิทิน
                 st.rerun()
 
     except Exception as e:
         st.error("พบข้อมูลขัดข้องในระบบ กรุณากดปุ่มเพื่อรีเซ็ตงานของวันนี้")
         if st.button("🗑️ ล้างข้อมูลและเริ่มใหม่"):
             st.session_state.calendar_db = st.session_state.calendar_db[st.session_state.calendar_db['วันที่'] != selected_date]
-            save_all()
+            save_data(["Calendar"])
             st.rerun()
 
 # ==========================================
@@ -273,7 +261,6 @@ menu_options = [
     "📊 สรุปภาพรวม", 
     "📅 ปฏิทินคิวงาน", 
     "📚 จัดการนิยาย & ไฟล์", 
-    "📝 บันทึกงานแปลรายวัน", 
     "💰 บัญชี & ค่าตอบแทน", 
     "⚙️ ตั้งค่าระบบ"
 ]
@@ -326,7 +313,6 @@ if menu == "📊 สรุปภาพรวม":
             fig_plat.update_layout(font_family="Kanit", showlegend=False)
             st.plotly_chart(fig_plat, use_container_width=True)
 
-    # --- ส่วนที่เพิ่มเข้ามาใหม่: 10 อันดับนิยายขายดีประจำเดือน ---
     st.markdown("---")
     st.subheader("🏆 10 อันดับนิยายขายดีประจำเดือน")
     if not df_finance.empty:
@@ -425,7 +411,7 @@ elif menu == "📅 ปฏิทินคิวงาน":
     edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=250)
     if st.button("💾 บันทึกตารางส่วนนี้", type="secondary"):
         st.session_state.calendar_db = edited_cal
-        save_all()
+        save_data(["Calendar"]) # บันทึกเฉพาะปฏิทิน
         st.rerun()
 
 # ------------------------------------------
@@ -453,7 +439,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                 new_url = upload_to_imgbb(uploaded_file)
                 if new_url: 
                     st.session_state.books_data[idx]['ภาพปก'] = new_url
-                    save_all()
+                    save_data(["Books"]) # บันทึกเฉพาะนิยาย
                     st.rerun()
             
         with c_form:
@@ -478,14 +464,14 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover,
                     'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt, 'เรื่องย่อ': e_synopsis
                 })
-                save_all()
+                save_data(["Books"]) # บันทึกเฉพาะนิยาย
                 st.session_state.selected_book_idx = None
                 st.rerun()
             
             st.markdown("<div class='btn-delete'>", unsafe_allow_html=True)
             if del_col.button("🗑️ ลบนิยายเรื่องนี้", use_container_width=True):
                 st.session_state.books_data.pop(idx)
-                save_all()
+                save_data(["Books"]) # บันทึกเฉพาะนิยาย
                 st.session_state.selected_book_idx = None
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -506,10 +492,9 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     if st.form_submit_button("เพิ่มนิยาย"):
                         if new_title:
                             st.session_state.books_data.append({'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 'ตอนปัจจุบัน': 0, 'เป้าหมาย': 100, 'ภาพปก': new_cover, 'เรื่องย่อ': '', 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []})
-                            save_all()
+                            save_data(["Books"]) # บันทึกเฉพาะนิยาย
                             st.rerun()
 
-            # แสดงผลนิยาย "ทั้งหมด" โดยแบ่งเป็นแถวละ 10 คอลัมน์ (เรียงเรื่องใหม่ไว้บนสุด)
             books_with_idx = [{'data': b, 'orig_idx': idx} for idx, b in enumerate(st.session_state.books_data)]
             all_books = books_with_idx[::-1] 
             
@@ -535,7 +520,7 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
             if st.session_state.books_data:
                 df_quick = pd.DataFrame(st.session_state.books_data)
                 df_quick['_orig_idx'] = df_quick.index
-                df_show = df_quick.iloc[::-1].copy() # โชว์ทั้งหมด เรียงจากใหม่ไปเก่า
+                df_show = df_quick.iloc[::-1].copy()
                 
                 edit_cols = ['ชื่อเรื่อง', 'หมวดหมู่', 'สถานะ', 'ตอนปัจจุบัน', 'QC']
                 
@@ -554,73 +539,11 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                         real_idx = df_show.iloc[i]['_orig_idx']
                         for col in edit_cols: 
                             st.session_state.books_data[real_idx][col] = edited_df.iloc[i][col]
-                    save_all()
+                    save_data(["Books"]) # บันทึกเฉพาะนิยาย
                     st.rerun()
 
 # ------------------------------------------
-# 📝 หน้า 4: บันทึกงานแปลรายวัน
-# ------------------------------------------
-elif menu == "📝 บันทึกงานแปลรายวัน":
-    st.title("📝 บันทึกงานแปล & ความคืบหน้า")
-    
-    tab1, tab2 = st.tabs(["⚙️ อัปเดตตอน & ต้นฉบับ", "📈 สรุปสปีดการแปล"])
-    with tab1:
-        search_update = st.text_input("🔍 ค้นหาชื่อเรื่องที่ต้องการอัปเดตยอด...")
-        for idx, b in enumerate(st.session_state.books_data):
-            if search_update and search_update.lower() not in b['ชื่อเรื่อง'].lower(): 
-                continue
-                
-            with st.expander(f"📖 {b['ชื่อเรื่อง']} | ตอนที่แปล: {b.get('ตอนปัจจุบัน', 0)} / {b.get('เป้าหมาย', 1)}"):
-                c1, c2 = st.columns([1, 3])
-                with c1: 
-                    safe_image(b.get('ภาพปก'), "rank-img")
-                with c2:
-                    c_in, c_btn = st.columns([2, 1])
-                    old_chap = int(b.get('ตอนปัจจุบัน', 0))
-                    new_chap = c_in.number_input("อัปเดตยอดที่แปลเสร็จ", value=old_chap, min_value=0, key=f"ch_{idx}")
-                    
-                    if c_btn.button("💾 บันทึกยอด", key=f"sv_{idx}", type="primary"):
-                        if new_chap > old_chap:
-                            new_log = pd.DataFrame([{'วันที่': datetime.today().strftime('%Y-%m-%d'), 'ชื่อเรื่อง': b['ชื่อเรื่อง'], 'QC': b.get('QC', 'ตอง'), 'จำนวนตอนที่เพิ่ม': new_chap - old_chap}])
-                            st.session_state.progress_log_db = pd.concat([st.session_state.progress_log_db, new_log], ignore_index=True)
-                        st.session_state.books_data[idx]['ตอนปัจจุบัน'] = new_chap
-                        save_all()
-                        st.rerun()
-                        
-                    orig_data = pd.DataFrame(b.get('ลิงก์ต้นฉบับ', [{"url":"", "note":""}]))
-                    st.write("**🇰🇷 ลิงก์ต้นฉบับเกาหลี**")
-                    edited_orig = st.data_editor(orig_data, num_rows="dynamic", use_container_width=True, key=f"orig_{idx}")
-                    
-                    if st.button("💾 บันทึกลิงก์ต้นฉบับ", key=f"svo_{idx}"):
-                        st.session_state.books_data[idx]['ลิงก์ต้นฉบับ'] = [r for r in edited_orig.to_dict('records') if r.get('url')]
-                        save_all()
-                        st.rerun()
-
-    with tab2:
-        df_prog = st.session_state.progress_log_db.copy()
-        if not df_prog.empty:
-            df_prog['วันที่'] = pd.to_datetime(df_prog['วันที่'])
-            df_prog['จำนวนตอนที่เพิ่ม'] = pd.to_numeric(df_prog['จำนวนตอนที่เพิ่ม']).fillna(0)
-            today_date = pd.Timestamp(datetime.today().date())
-            start_month = today_date.replace(day=1)
-            
-            tong_m = df_prog[(df_prog['วันที่'] >= start_month) & (df_prog['QC'] == 'ตอง')]['จำนวนตอนที่เพิ่ม'].sum()
-            tao_m = df_prog[(df_prog['วันที่'] >= start_month) & (df_prog['QC'] == 'ตาว')]['จำนวนตอนที่เพิ่ม'].sum()
-            
-            c1, c2, c3 = st.columns(3)
-            with c1: 
-                st.markdown(f"<div class='progress-box'><h4>💖 ตอง (เดือนนี้)</h4><div class='progress-value val-tong'>{int(tong_m)}</div></div>", unsafe_allow_html=True)
-            with c2: 
-                st.markdown(f"<div class='progress-box'><h4>💙 ตาว (เดือนนี้)</h4><div class='progress-value val-tao'>{int(tao_m)}</div></div>", unsafe_allow_html=True)
-            with c3: 
-                st.markdown(f"<div class='progress-box'><h4>🌍 รวมทีม (เดือนนี้)</h4><div class='progress-value' style='color:#818cf8;'>{int(tong_m + tao_m)}</div></div>", unsafe_allow_html=True)
-            
-            st.dataframe(df_prog.sort_values(by='วันที่', ascending=False), use_container_width=True)
-        else: 
-            st.write("ยังไม่มีบันทึกความคืบหน้าครับ")
-
-# ------------------------------------------
-# 💰 หน้า 5: บัญชี & ค่าตอบแทน
+# 💰 หน้า 4: บัญชี & ค่าตอบแทน
 # ------------------------------------------
 elif menu == "💰 บัญชี & ค่าตอบแทน":
     st.title("💰 จัดการบัญชี & ส่วนแบ่ง (QC)")
@@ -645,7 +568,7 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
                 
                 if new_entries:
                     st.session_state.finance_db = pd.concat([st.session_state.finance_db, pd.DataFrame(new_entries)], ignore_index=True)
-                    save_all()
+                    save_data(["Finance"]) # บันทึกเฉพาะบัญชี
                     st.rerun()
                 else: 
                     st.warning("ไม่มียอดให้บันทึกครับ")
@@ -656,7 +579,7 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
         edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
         if st.button("💾 บันทึกตารางฐานข้อมูล"): 
             st.session_state.finance_db = edited_finance
-            save_all()
+            save_data(["Finance"]) # บันทึกเฉพาะบัญชี
             st.rerun()
 
     with tab3:
@@ -686,7 +609,7 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
             st.dataframe(df_m[['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'QC', 'ยอดสุทธิ']].sort_values('ยอดสุทธิ', ascending=False), use_container_width=True)
 
 # ------------------------------------------
-# ⚙️ หน้า 6: ตั้งค่าระบบ
+# ⚙️ หน้า 5: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
     st.title("⚙️ ตั้งค่าหมวดหมู่และแพลตฟอร์ม")
@@ -702,5 +625,5 @@ elif menu == "⚙️ ตั้งค่าระบบ":
     if st.button("💾 บันทึกการตั้งค่า", type="primary"):
         st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
         st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
-        save_all()
+        save_data(["Settings"]) # บันทึกเฉพาะการตั้งค่า
         st.rerun()
