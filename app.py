@@ -102,7 +102,7 @@ def get_imgbb_api_key():
 
     if not key:
         st.error("🚨 ไม่พบ IMGBB_API_KEY ใน secrets/env กรุณาตั้งค่าใน Streamlit Secrets")
-        st.info("ตัวอย่าง: IMGBB_API_KEY = "<your_imgbb_key>"")
+        st.info('ตัวอย่าง: `IMGBB_API_KEY = "your_imgbb_key"`')
         return None
     return key
 
