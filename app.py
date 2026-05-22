@@ -76,7 +76,7 @@ def get_thai_date(raw_date_str):
                 dt = dt + pd.Timedelta(hours=7)
             return dt.strftime("%Y-%m-%d")
         return str(raw_date_str)[:10]
-    except:
+    except (ValueError, TypeError):
         return str(raw_date_str)[:10]
 
 # ==========================================
@@ -103,6 +103,86 @@ def clean_str(val):
 def log_error(context, error):
     """แสดงข้อความ error มาตรฐานให้อ่านง่ายและ debug ได้"""
     st.error(f"❌ {context}: {type(error).__name__} - {error}")
+
+
+
+
+def check_required_secrets():
+    """ตรวจสอบความพร้อมของ secrets ที่จำเป็นตั้งแต่เริ่มแอป"""
+    required_keys = ["IMGBB_API_KEY"]
+    missing = [k for k in required_keys if not st.secrets.get(k)]
+    if missing:
+        st.warning(f"⚠️ ยังไม่ได้ตั้งค่า secrets: {', '.join(missing)} (ฟีเจอร์อัปโหลดรูปจะใช้งานไม่ได้)")
+
+
+def safe_parse_date(value):
+    """คืนค่าวันที่รูปแบบ YYYY-MM-DD ถ้าแปลงไม่ได้คืน None"""
+    try:
+        dt = pd.to_datetime(value, errors='raise')
+        return dt.strftime('%Y-%m-%d')
+    except (ValueError, TypeError):
+        return None
+
+
+def deduplicate_dataframe(df, subset_cols):
+    """ลบข้อมูลซ้ำโดยยึดแถวล่าสุด"""
+    if df.empty:
+        return df
+    return df.drop_duplicates(subset=subset_cols, keep='last').reset_index(drop=True)
+
+
+def validate_book_editor_df(df):
+    """ตรวจสอบข้อมูลจาก data_editor ของหนังสือ"""
+    errors = []
+    for i, row in df.iterrows():
+        if not str(row.get('ชื่อเรื่อง', '')).strip():
+            errors.append(f"แถว {i+1}: ชื่อเรื่องห้ามว่าง")
+        for ncol in ['ตอนปัจจุบัน']:
+            val = pd.to_numeric(row.get(ncol), errors='coerce')
+            if pd.isna(val) or val < 0:
+                errors.append(f"แถว {i+1}: {ncol} ต้องเป็นเลข >= 0")
+    return errors
+
+
+def validate_finance_editor_df(df):
+    """ตรวจสอบตารางการเงินก่อนบันทึก"""
+    required = ['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ']
+    errors = []
+    for col in required:
+        if col not in df.columns:
+            errors.append(f"ไม่มีคอลัมน์ {col}")
+    if errors:
+        return errors
+
+    for i, row in df.iterrows():
+        if not safe_parse_date(row.get('วันที่')):
+            errors.append(f"แถว {i+1}: วันที่ไม่ถูกต้อง")
+        if not str(row.get('ชื่อเรื่อง', '')).strip():
+            errors.append(f"แถว {i+1}: ชื่อเรื่องห้ามว่าง")
+        if not str(row.get('แพลตฟอร์ม', '')).strip():
+            errors.append(f"แถว {i+1}: แพลตฟอร์มห้ามว่าง")
+    return errors
+
+
+def append_audit_log(action, detail):
+    """บันทึกกิจกรรมสำคัญลง session เพื่อนำไปบันทึกชีต AuditLog"""
+    if 'audit_log' not in st.session_state:
+        st.session_state.audit_log = pd.DataFrame(columns=['เวลา', 'การกระทำ', 'รายละเอียด'])
+    new_row = pd.DataFrame([{
+        'เวลา': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'การกระทำ': action,
+        'รายละเอียด': detail
+    }])
+    st.session_state.audit_log = pd.concat([st.session_state.audit_log, new_row], ignore_index=True)
+
+
+def export_section_csv(label, df, filename):
+    """แสดงปุ่มดาวน์โหลด CSV"""
+    if df is None or df.empty:
+        st.caption(f"{label}: ยังไม่มีข้อมูลให้ดาวน์โหลด")
+        return
+    csv_data = df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(f"⬇️ Export {label} (CSV)", data=csv_data, file_name=filename, mime='text/csv')
 
 
 def upload_to_imgbb(file, timeout=20, retries=2):
@@ -204,6 +284,7 @@ def fetch_all_google_sheets():
         return None, None, None, None
 
 def initialize_data():
+    check_required_secrets()
     b_df, f_df, c_df, s_df = fetch_all_google_sheets()
     
     if b_df is None:
@@ -216,11 +297,16 @@ def initialize_data():
     st.session_state.books_data = books
 
     st.session_state.finance_db = f_df if not f_df.empty else pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม', 'ยอดดิบ', 'หักแพลตฟอร์ม (17%)', 'ยอดสุทธิ'])
+    st.session_state.finance_db = deduplicate_dataframe(st.session_state.finance_db, ['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม'])
     
     if not c_df.empty:
         st.session_state.calendar_db = c_df.dropna(how='all').dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
+        st.session_state.calendar_db = deduplicate_dataframe(st.session_state.calendar_db, ['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
     else:
         st.session_state.calendar_db = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+
+    if 'audit_log' not in st.session_state:
+        st.session_state.audit_log = pd.DataFrame(columns=['เวลา', 'การกระทำ', 'รายละเอียด'])
     
     if not s_df.empty:
         st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
@@ -255,6 +341,7 @@ def save_data(sheets_to_save):
             conn.update(worksheet="Books", data=df_save)
 
         if "Finance" in sheets_to_save:
+            st.session_state.finance_db = deduplicate_dataframe(st.session_state.finance_db, ['วันที่', 'ชื่อเรื่อง', 'แพลตฟอร์ม'])
             conn.update(worksheet="Finance", data=st.session_state.finance_db)
 
         if "Calendar" in sheets_to_save:
@@ -265,6 +352,7 @@ def save_data(sheets_to_save):
                 return
             if not df_cal.empty:
                 df_cal = df_cal.dropna(subset=['วันที่', 'ชื่อเรื่อง']).reset_index(drop=True)
+                df_cal = deduplicate_dataframe(df_cal, ['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
             else:
                 df_cal = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
             conn.update(worksheet="Calendar", data=df_cal)
@@ -272,6 +360,9 @@ def save_data(sheets_to_save):
         if "Settings" in sheets_to_save:
             set_df = pd.DataFrame({"categories": pd.Series(st.session_state.app_settings['categories']), "platforms": pd.Series(st.session_state.app_settings['platforms'])})
             conn.update(worksheet="Settings", data=set_df)
+
+        if "AuditLog" in sheets_to_save and 'audit_log' in st.session_state:
+            conn.update(worksheet="AuditLog", data=st.session_state.audit_log)
             
         st.cache_data.clear()
         st.toast(f"✅ บันทึกข้อมูลเรียบร้อยแล้ว!")
@@ -488,8 +579,9 @@ elif menu == "📅 ปฏิทินคิวงาน":
     st.write("ตารางสำหรับตรวจสอบความถูกต้องหรือลบข้อมูลอย่างรวดเร็ว (อัปเดตอัตโนมัติ)")
     edited_cal = st.data_editor(st.session_state.calendar_db, num_rows="dynamic", use_container_width=True, height=250)
     if st.button("💾 บันทึกตารางส่วนนี้", type="secondary"):
-        st.session_state.calendar_db = edited_cal
-        save_data(["Calendar"]) # บันทึกเฉพาะปฏิทิน
+        st.session_state.calendar_db = deduplicate_dataframe(edited_cal, ['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
+        append_audit_log('แก้ไขปฏิทิน', f"จำนวน {len(st.session_state.calendar_db)} แถว")
+        save_data(["Calendar", "AuditLog"]) # บันทึกเฉพาะปฏิทิน
         st.rerun()
 
 # ------------------------------------------
@@ -517,7 +609,8 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                 new_url = upload_to_imgbb(uploaded_file)
                 if new_url: 
                     st.session_state.books_data[idx]['ภาพปก'] = new_url
-                    save_data(["Books"]) # บันทึกเฉพาะนิยาย
+                    append_audit_log('อัปโหลดปก', f"{b['ชื่อเรื่อง']}")
+                    save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
                     st.rerun()
             
         with c_form:
@@ -542,14 +635,17 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                     'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover,
                     'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt, 'เรื่องย่อ': e_synopsis
                 })
-                save_data(["Books"]) # บันทึกเฉพาะนิยาย
+                append_audit_log('แก้ไขนิยาย', e_title)
+                save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
                 st.session_state.selected_book_idx = None
                 st.rerun()
             
             st.markdown("<div class='btn-delete'>", unsafe_allow_html=True)
             if del_col.button("🗑️ ลบนิยายเรื่องนี้", use_container_width=True):
+                deleted_title = st.session_state.books_data[idx].get('ชื่อเรื่อง', 'ไม่ทราบชื่อ')
                 st.session_state.books_data.pop(idx)
-                save_data(["Books"]) # บันทึกเฉพาะนิยาย
+                append_audit_log('ลบนิยาย', deleted_title)
+                save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
                 st.session_state.selected_book_idx = None
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -613,6 +709,11 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                 )
                 
                 if st.button("💾 บันทึกตาราง", type="primary"):
+                    book_errors = validate_book_editor_df(edited_df)
+                    if book_errors:
+                        for err in book_errors[:5]:
+                            st.warning(err)
+                        st.stop()
                     for i in range(len(edited_df)):
                         real_idx = df_show.iloc[i]['_orig_idx']
                         for col in edit_cols: 
@@ -646,7 +747,8 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
                 
                 if new_entries:
                     st.session_state.finance_db = pd.concat([st.session_state.finance_db, pd.DataFrame(new_entries)], ignore_index=True)
-                    save_data(["Finance"]) # บันทึกเฉพาะบัญชี
+                    append_audit_log('เพิ่มรายรับ', f"{q_date.strftime('%Y-%m-%d')} / {q_plat} / {q_qc}")
+                    save_data(["Finance", "AuditLog"]) # บันทึกเฉพาะบัญชี
                     st.rerun()
                 else: 
                     st.warning("ไม่มียอดให้บันทึกครับ")
@@ -656,8 +758,14 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
     with tab2:
         edited_finance = st.data_editor(st.session_state.finance_db, num_rows="dynamic", use_container_width=True)
         if st.button("💾 บันทึกตารางฐานข้อมูล"): 
+            fin_errors = validate_finance_editor_df(edited_finance)
+            if fin_errors:
+                for err in fin_errors[:5]:
+                    st.warning(err)
+                st.stop()
             st.session_state.finance_db = edited_finance
-            save_data(["Finance"]) # บันทึกเฉพาะบัญชี
+            append_audit_log('แก้ไขฐานข้อมูลการเงิน', f"จำนวน {len(edited_finance)} แถว")
+            save_data(["Finance", "AuditLog"]) # บันทึกเฉพาะบัญชี
             st.rerun()
 
     with tab3:
@@ -700,6 +808,16 @@ elif menu == "⚙️ ตั้งค่าระบบ":
         st.subheader("🌐 แพลตฟอร์มเผยแพร่")
         ed_p = st.data_editor(pd.DataFrame(st.session_state.app_settings['platforms'], columns=['ชื่อแพลตฟอร์ม']), num_rows="dynamic", use_container_width=True)
         
+    st.markdown('---')
+    st.subheader('📦 สำรองข้อมูล (Backup CSV)')
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        export_section_csv('Books', pd.DataFrame(st.session_state.books_data), 'books_backup.csv')
+    with e2:
+        export_section_csv('Finance', st.session_state.finance_db, 'finance_backup.csv')
+    with e3:
+        export_section_csv('Calendar', st.session_state.calendar_db, 'calendar_backup.csv')
+
     if st.button("💾 บันทึกการตั้งค่า", type="primary"):
         st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
         st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
