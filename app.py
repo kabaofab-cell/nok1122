@@ -48,14 +48,20 @@ def fetch_all_google_sheets():
         f_df = conn.read(worksheet="Finance")
         c_df = conn.read(worksheet="Calendar")
         s_df = conn.read(worksheet="Settings")
-        return b_df, f_df, c_df, s_df
     except Exception as e:
         log_error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ", e)
-        return None, None, None, None
+        return None, None, None, None, None
+
+    try:
+        a_df = conn.read(worksheet="AuditLog")
+    except Exception:
+        a_df = pd.DataFrame(columns=["เวลา", "การกระทำ", "รายละเอียด"])
+
+    return b_df, f_df, c_df, s_df, a_df
 
 def initialize_data():
     check_required_secrets()
-    b_df, f_df, c_df, s_df = fetch_all_google_sheets()
+    b_df, f_df, c_df, s_df, a_df = fetch_all_google_sheets()
     
     if b_df is None:
         st.session_state.read_only_mode = True
@@ -91,6 +97,7 @@ def initialize_data():
         )
         c_df = pd.DataFrame([{"วันที่": "2026-05-30", "ชื่อเรื่อง": "ตัวอย่างนิยาย", "ตอนที่": 13}])
         s_df = pd.DataFrame()
+        a_df = pd.DataFrame(columns=["เวลา", "การกระทำ", "รายละเอียด"])
     else:
         st.session_state.read_only_mode = False
         
@@ -108,8 +115,11 @@ def initialize_data():
     else:
         st.session_state.calendar_db = pd.DataFrame(columns=['วันที่', 'ชื่อเรื่อง', 'ตอนที่'])
 
-    if 'audit_log' not in st.session_state:
-        st.session_state.audit_log = pd.DataFrame(columns=['เวลา', 'การกระทำ', 'รายละเอียด'])
+    audit_columns = ["เวลา", "การกระทำ", "รายละเอียด"]
+    if a_df is not None and not a_df.empty:
+        st.session_state.audit_log = a_df.reindex(columns=audit_columns).dropna(how="all").reset_index(drop=True)
+    elif "audit_log" not in st.session_state:
+        st.session_state.audit_log = pd.DataFrame(columns=audit_columns)
     
     if not s_df.empty:
         st.session_state.app_settings = {"categories": s_df['categories'].dropna().tolist(), "platforms": s_df['platforms'].dropna().tolist()}
@@ -169,7 +179,8 @@ def save_data(sheets_to_save):
             conn.update(worksheet="Settings", data=set_df)
 
         if "AuditLog" in sheets_to_save and 'audit_log' in st.session_state:
-            conn.update(worksheet="AuditLog", data=st.session_state.audit_log)
+            audit_df = st.session_state.audit_log.reindex(columns=["เวลา", "การกระทำ", "รายละเอียด"])
+            conn.update(worksheet="AuditLog", data=audit_df)
             
         fetch_all_google_sheets.clear()
         st.toast(f"✅ บันทึกข้อมูลเรียบร้อยแล้ว!")

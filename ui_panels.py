@@ -62,7 +62,7 @@ def render_audit_log_viewer():
 
 
 @st.dialog("📅 บันทึกคิวงานรายวัน")
-def daily_manager_dialog(selected_date, unique_novels):
+def daily_manager_dialog(selected_date, unique_novels, save_data=None):
     st.markdown(f"**ตารางงานของวันที่:** `{selected_date}`")
 
     day_events = st.session_state.calendar_db[st.session_state.calendar_db["วันที่"] == selected_date].copy()
@@ -105,6 +105,8 @@ def daily_manager_dialog(selected_date, unique_novels):
 
                 st.session_state.last_processed_state = None
                 append_audit_log("บันทึกคิวงานรายวัน", selected_date)
+                if save_data is not None:
+                    save_data(["Calendar", "AuditLog"])
                 st.rerun()
 
     except Exception:

@@ -64,11 +64,11 @@ def render_calendar_page(get_thai_date, daily_manager_dialog, append_audit_log, 
             if state["callback"] == "dateClick":
                 raw_date = state["dateClick"]["date"]
                 clicked_date = get_thai_date(raw_date)
-                daily_manager_dialog(clicked_date, unique_novels)
+                daily_manager_dialog(clicked_date, unique_novels, save_data)
             elif state["callback"] == "eventClick":
                 raw_date = state["eventClick"]["event"]["start"]
                 clicked_date = get_thai_date(raw_date)
-                daily_manager_dialog(clicked_date, unique_novels)
+                daily_manager_dialog(clicked_date, unique_novels, save_data)
 
     st.markdown("---")
     st.subheader("⚡ ตารางตรวจสอบรายเดือน")

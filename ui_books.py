@@ -18,7 +18,8 @@ def render_books_page(safe_image, upload_to_imgbb, append_audit_log, save_data, 
                 if st.form_submit_button("เพิ่มนิยาย"):
                     if new_title:
                         st.session_state.books_data.append({'ชื่อเรื่อง': new_title, 'หมวดหมู่': new_cat, 'QC': new_qc, 'สถานะ': 'กำลังอัปเดต', 'ตอนปัจจุบัน': 0, 'เป้าหมาย': 100, 'ภาพปก': new_cover, 'เรื่องย่อ': '', 'ลิงก์อ่าน': [], 'ลิงก์ต้นฉบับ': []})
-                        save_data(["Books"]) # บันทึกเฉพาะนิยาย
+                        append_audit_log("เพิ่มนิยาย", new_title)
+                        save_data(["Books", "AuditLog"])
                         st.rerun()
 
         st.markdown('---')
@@ -92,5 +93,6 @@ def render_books_page(safe_image, upload_to_imgbb, append_audit_log, save_data, 
                     real_idx = df_show.iloc[i]['_orig_idx']
                     for col in edit_cols: 
                         st.session_state.books_data[real_idx][col] = edited_df.iloc[i][col]
-                save_data(["Books"]) # บันทึกเฉพาะนิยาย
+                append_audit_log("แก้ไขตารางนิยาย", f"จำนวน {len(edited_df)} แถว")
+                save_data(["Books", "AuditLog"])
                 st.rerun()
