@@ -251,72 +251,15 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
                 st.session_state.books_data.pop(idx)
                 append_audit_log('ลบนิยาย', deleted_title)
                 save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
-                st.session_state.selected_book_idx = None
 # ------------------------------------------
-# ?? ???? 3: ??????????? & ????
+# 📚 หน้า 3: จัดการนิยาย & ไฟล์
 # ------------------------------------------
-elif menu == "?? ??????????? & ????":
+elif menu == "📚 จัดการนิยาย & ไฟล์":
     render_books_page(safe_image, upload_to_imgbb, append_audit_log, save_data, validate_book_editor_df)
 
 # ------------------------------------------
-# ?? ???? 4: ????? & ?????????
+# 💰 หน้า 4: บัญชี & ค่าตอบแทน
 # ------------------------------------------
-elif menu == "?? ????? & ?????????":
+elif menu == "💰 บัญชี & ค่าตอบแทน":
     render_finance_page(append_audit_log, save_data, validate_finance_editor_df)
 
-
-# ------------------------------------------
-# 🧾 หน้า 5: ประวัติการแก้ไข
-# ------------------------------------------
-elif menu == "🧾 ประวัติการแก้ไข":
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-kicker">Audit</div>
-            <div class="hero-title">ประวัติการแก้ไข</div>
-            <p class="hero-subtitle">ดูว่ามีการเปลี่ยนแปลงอะไร เมื่อไหร่ และโดยใคร เพื่อให้ตามงานและตรวจสอบย้อนหลังได้ง่าย</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    render_audit_log_viewer()
-
-# ------------------------------------------
-# ⚙️ หน้า 6: ตั้งค่าระบบ
-# ------------------------------------------
-elif menu == "⚙️ ตั้งค่าระบบ":
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-kicker">Settings</div>
-            <div class="hero-title">ตั้งค่าระบบ</div>
-            <p class="hero-subtitle">จัดการหมวดหมู่ แพลตฟอร์ม และสำรองข้อมูลได้จากหน้าเดียว</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.title("⚙️ ตั้งค่าหมวดหมู่และแพลตฟอร์ม")
-    
-    c1, c2 = st.columns(2)
-    with c1: 
-        st.subheader("📚 หมวดหมู่นิยาย")
-        ed_c = st.data_editor(pd.DataFrame(st.session_state.app_settings['categories'], columns=['ชื่อหมวดหมู่']), num_rows="dynamic", use_container_width=True)
-    with c2: 
-        st.subheader("🌐 แพลตฟอร์มเผยแพร่")
-        ed_p = st.data_editor(pd.DataFrame(st.session_state.app_settings['platforms'], columns=['ชื่อแพลตฟอร์ม']), num_rows="dynamic", use_container_width=True)
-        
-    st.markdown('---')
-    st.subheader('📦 สำรองข้อมูล (Backup CSV)')
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        export_section_csv('Books', pd.DataFrame(st.session_state.books_data), 'books_backup.csv')
-    with e2:
-        export_section_csv('Finance', st.session_state.finance_db, 'finance_backup.csv')
-    with e3:
-        export_section_csv('Calendar', st.session_state.calendar_db, 'calendar_backup.csv')
-
-    if st.button("💾 บันทึกการตั้งค่า", type="primary"):
-        st.session_state.app_settings['categories'] = ed_c['ชื่อหมวดหมู่'].replace('', pd.NA).dropna().tolist()
-        st.session_state.app_settings['platforms'] = ed_p['ชื่อแพลตฟอร์ม'].replace('', pd.NA).dropna().tolist()
-        save_data(["Settings"]) # บันทึกเฉพาะการตั้งค่า
-        st.rerun()
