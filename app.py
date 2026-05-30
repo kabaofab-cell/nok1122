@@ -3,7 +3,6 @@ import json
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-import plotly.express as px
 from streamlit_calendar import calendar
 from app_utils import (
     append_audit_log,
@@ -24,6 +23,7 @@ from app_utils import (
     validate_finance_editor_df,
 )
 from ui_components import render_app_style, render_hero, render_sidebar_brand
+from ui_dashboard import render_dashboard
 from ui_panels import daily_manager_dialog, render_audit_log_viewer, render_system_health_panel
 
 # ==========================================
@@ -168,87 +168,7 @@ if menu != "📚 จัดการนิยาย & ไฟล์":
 # 📊 หน้า 1: สรุปภาพรวม (Dashboard)
 # ------------------------------------------
 if menu == "📊 สรุปภาพรวม":
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-kicker">Overview</div>
-            <div class="hero-title">สรุปภาพรวมของระบบ</div>
-            <p class="hero-subtitle">ดูสถานะนิยาย คิวงาน และรายรับได้ในหน้าเดียว พร้อมปุ่มทางลัดสำหรับรีเฟรชข้อมูลอย่างรวดเร็ว</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    render_system_health_panel()
-    
-    if st.button("🔄 โหลดข้อมูลใหม่", type="primary"): 
-        fetch_all_google_sheets.clear()
-        st.session_state.pop('books_data', None)
-        st.session_state.pop('finance_db', None)
-        st.session_state.pop('calendar_db', None)
-        st.session_state.pop('app_settings', None)
-        st.rerun()
-    
-    total_books = len(st.session_state.books_data)
-    active_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'กำลังอัปเดต')
-    finished_books = sum(1 for b in st.session_state.books_data if b.get('สถานะ') == 'จบแล้ว')
-    
-    df_finance = st.session_state.finance_db.copy()
-    total_revenue = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').sum() if not df_finance.empty else 0
-
-    st.markdown('<div class="section-title">ภาพรวมตัวเลขสำคัญ</div>', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: 
-        st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books}</h2></div>", unsafe_allow_html=True)
-    with col2: 
-        st.markdown(f"<div class='metric-card'><h3>🔥 กำลังแปล</h3><h2>{active_books}</h2></div>", unsafe_allow_html=True)
-    with col3: 
-        st.markdown(f"<div class='metric-card'><h3>🎉 จบแล้ว</h3><h2>{finished_books}</h2></div>", unsafe_allow_html=True)
-    with col4: 
-        st.markdown(f"<div class='metric-card'><h3>💰 ยอดสุทธิรวม</h3><h2 style='color:#818cf8;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="section-title">แนวโน้มรายงาน</div>', unsafe_allow_html=True)
-    c_c1, c_c2 = st.columns(2)
-    with c_c1:
-        if total_books > 0:
-            fig_cat = px.pie(pd.DataFrame(st.session_state.books_data), names='หมวดหมู่', title='สัดส่วนนิยายแยกตามหมวดหมู่', hole=0.45, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_cat.update_layout(font_family="Kanit")
-            st.plotly_chart(fig_cat, use_container_width=True)
-    with c_c2:
-        if not df_finance.empty and total_revenue > 0:
-            fig_plat = px.bar(df_finance.groupby('แพลตฟอร์ม')['ยอดสุทธิ'].sum().reset_index(), x='แพลตฟอร์ม', y='ยอดสุทธิ', title='รายได้สุทธิแยกตามแพลตฟอร์ม', text_auto='.2s', color='แพลตฟอร์ม', color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_plat.update_layout(font_family="Kanit", showlegend=False)
-            st.plotly_chart(fig_plat, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("🏆 10 อันดับนิยายขายดีประจำเดือน")
-    if not df_finance.empty:
-        df_finance['เดือน-ปี'] = pd.to_datetime(df_finance['วันที่']).dt.strftime('%Y-%m')
-        avail_months = sorted(df_finance['เดือน-ปี'].dropna().unique(), reverse=True)
-        
-        if avail_months:
-            selected_dash_month = st.selectbox("📌 เลือกเดือนที่ต้องการดูยอดขาย", avail_months, key="dash_month_selector")
-            df_month = df_finance[df_finance['เดือน-ปี'] == selected_dash_month]
-            
-            if not df_month.empty:
-                df_month['ยอดสุทธิ'] = pd.to_numeric(df_month['ยอดสุทธิ'], errors='coerce').fillna(0)
-                top10 = df_month.groupby('ชื่อเรื่อง')['ยอดสุทธิ'].sum().reset_index()
-                top10 = top10.sort_values(by='ยอดสุทธิ', ascending=False).head(10)
-                top10.index = range(1, len(top10) + 1)
-                
-                dash_c1, dash_c2 = st.columns([1, 2])
-                with dash_c1:
-                    st.dataframe(top10.style.format({"ยอดสุทธิ": "฿{:,.2f}"}), use_container_width=True)
-                with dash_c2:
-                    fig_top10 = px.bar(
-                        top10, x='ยอดสุทธิ', y='ชื่อเรื่อง', orientation='h', 
-                        title=f"Top 10 Bestsellers ({selected_dash_month})", 
-                        text='ยอดสุทธิ', color='ยอดสุทธิ', color_continuous_scale="Purp"
-                    )
-                    fig_top10.update_traces(texttemplate='฿%{text:,.0f}', textposition='outside')
-                    fig_top10.update_layout(yaxis={'categoryorder':'total ascending'}, font_family="Kanit", coloraxis_showscale=False)
-                    st.plotly_chart(fig_top10, use_container_width=True)
-            else:
-                st.info("ไม่มีข้อมูลยอดขายในเดือนที่เลือก")
+    render_dashboard(fetch_all_google_sheets)
 
 # ------------------------------------------
 # 📅 หน้า 2: ปฏิทินคิวงาน (Smart Flex)
