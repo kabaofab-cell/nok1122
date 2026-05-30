@@ -36,11 +36,14 @@ def get_thai_date(raw_date_str):
 def get_imgbb_api_key():
     key = ""
     if hasattr(st, "secrets"):
-        key = (
-            st.secrets.get("IMGBB_API_KEY", "")
-            or st.secrets.get("imgbb_api_key", "")
-            or st.secrets.get("IMGBB_KEY", "")
-        )
+        try:
+            key = (
+                st.secrets.get("IMGBB_API_KEY", "")
+                or st.secrets.get("imgbb_api_key", "")
+                or st.secrets.get("IMGBB_KEY", "")
+            )
+        except Exception:
+            key = ""
     if not key:
         import os
 
@@ -62,7 +65,10 @@ def log_error(context, error):
 
 def check_required_secrets():
     required_keys = ["IMGBB_API_KEY"]
-    missing = [k for k in required_keys if not st.secrets.get(k)]
+    try:
+        missing = [k for k in required_keys if not st.secrets.get(k)]
+    except Exception:
+        missing = required_keys
     if missing:
         st.warning(
             f"⚠️ ยังไม่ได้ตั้งค่า secrets: {', '.join(missing)} (ฟีเจอร์อัปโหลดรูปจะใช้งานไม่ได้)"
@@ -112,6 +118,48 @@ def validate_finance_editor_df(df):
         if not str(row.get("แพลตฟอร์ม", "")).strip():
             errors.append(f"แถว {i+1}: แพลตฟอร์มห้ามว่าง")
     return errors
+
+
+def validate_books_data(books):
+    if books is None:
+        return False, "ไม่พบข้อมูลหนังสือ"
+    if not isinstance(books, list):
+        return False, "รูปแบบข้อมูลหนังสือต้องเป็น list"
+
+    required = ["ชื่อเรื่อง", "หมวดหมู่", "สถานะ", "ตอนปัจจุบัน", "เป้าหมาย"]
+    for i, book in enumerate(books, start=1):
+        for col in required:
+            if col not in book:
+                return False, f"แถว {i}: ไม่มีคอลัมน์ {col}"
+        if not str(book.get("ชื่อเรื่อง", "")).strip():
+            return False, f"แถว {i}: ชื่อเรื่องห้ามว่าง"
+        for col in ["ตอนปัจจุบัน", "เป้าหมาย"]:
+            value = pd.to_numeric(book.get(col), errors="coerce")
+            if pd.isna(value) or value < 0:
+                return False, f"แถว {i}: {col} ต้องเป็นตัวเลข >= 0"
+    return True, "ข้อมูลหนังสือถูกต้อง"
+
+
+def validate_calendar_data(df):
+    if df is None:
+        return False, "ไม่พบข้อมูลปฏิทิน"
+    if df.empty:
+        return True, "ไม่มีข้อมูลปฏิทิน"
+
+    required = ["วันที่", "ชื่อเรื่อง", "ตอนที่"]
+    for col in required:
+        if col not in df.columns:
+            return False, f"ไม่มีคอลัมน์ {col}"
+
+    for i, row in df.iterrows():
+        if not safe_parse_date(row.get("วันที่")):
+            return False, f"แถว {i+1}: วันที่ไม่ถูกต้อง"
+        if not str(row.get("ชื่อเรื่อง", "")).strip():
+            return False, f"แถว {i+1}: ชื่อเรื่องห้ามว่าง"
+        episode = pd.to_numeric(row.get("ตอนที่"), errors="coerce")
+        if pd.isna(episode) or episode < 0:
+            return False, f"แถว {i+1}: ตอนที่ต้องเป็นตัวเลข >= 0"
+    return True, "ข้อมูลปฏิทินถูกต้อง"
 
 
 def append_audit_log(action, detail):
@@ -187,4 +235,3 @@ def normalize_book_record(book):
     book["ตอนปัจจุบัน"] = int(book.get("ตอนปัจจุบัน", 0)) if pd.notna(book.get("ตอนปัจจุบัน")) else 0
     book["เป้าหมาย"] = int(book.get("เป้าหมาย", 1)) if pd.notna(book.get("เป้าหมาย")) else 1
     return book
-

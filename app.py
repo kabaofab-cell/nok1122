@@ -11,6 +11,7 @@ from app_utils import (
     log_error,
     normalize_book_record,
     safe_image,
+    upload_to_imgbb,
     validate_book_editor_df,
     validate_books_data,
     validate_calendar_data,
@@ -29,6 +30,7 @@ from ui_panels import daily_manager_dialog
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
 # ==========================================
 st.set_page_config(page_title="Nok-kaew Admin Pro", layout="wide", page_icon="💎")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Modern Soft UI & Smart Flex)
@@ -56,8 +58,41 @@ def initialize_data():
     b_df, f_df, c_df, s_df = fetch_all_google_sheets()
     
     if b_df is None:
-        st.error("🚨 ไม่สามารถเชื่อมต่อกับ Google Sheets ได้ กรุณาตรวจสอบชื่อแผ่นงานให้ถูกต้อง")
-        st.stop()
+        st.session_state.read_only_mode = True
+        st.warning("กำลังเปิดโหมดตัวอย่าง เพราะยังเชื่อมต่อ Google Sheets ไม่ได้ ข้อมูลในโหมดนี้จะไม่ถูกบันทึก")
+        b_df = pd.DataFrame(
+            [
+                {
+                    "ชื่อเรื่อง": "ตัวอย่างนิยาย",
+                    "หมวดหมู่": "นิยายรัก",
+                    "QC": "ต้อง",
+                    "สถานะ": "กำลังอัปเดต",
+                    "ตอนปัจจุบัน": 12,
+                    "เป้าหมาย": 30,
+                    "ภาพปก": "",
+                    "เรื่องย่อ": "ข้อมูลตัวอย่างสำหรับตรวจหน้าตา UI",
+                    "หมายเหตุ": "",
+                    "ลิงก์อ่าน": "[]",
+                    "ลิงก์ต้นฉบับ": "[]",
+                }
+            ]
+        )
+        f_df = pd.DataFrame(
+            [
+                {
+                    "วันที่": "2026-05-30",
+                    "ชื่อเรื่อง": "ตัวอย่างนิยาย",
+                    "แพลตฟอร์ม": "ReadToon",
+                    "ยอดดิบ": 1200,
+                    "หักแพลตฟอร์ม (17%)": 204,
+                    "ยอดสุทธิ": 996,
+                }
+            ]
+        )
+        c_df = pd.DataFrame([{"วันที่": "2026-05-30", "ชื่อเรื่อง": "ตัวอย่างนิยาย", "ตอนที่": 13}])
+        s_df = pd.DataFrame()
+    else:
+        st.session_state.read_only_mode = False
         
     books = b_df.to_dict('records')
     for b in books:
@@ -89,6 +124,10 @@ if 'books_data' not in st.session_state:
 # ==========================================
 def save_data(sheets_to_save):
     """ส่งข้อมูลเฉพาะแผ่นงานที่มีการอัปเดต เพื่อลดระยะเวลาการบันทึกข้อมูล"""
+    if st.session_state.get("read_only_mode"):
+        st.warning("โหมดตัวอย่างไม่สามารถบันทึกข้อมูลได้ กรุณาตั้งค่า Google Sheets ก่อนใช้งานจริง")
+        return
+
     try:
         if "Books" in sheets_to_save:
             is_valid, message = validate_books_data(st.session_state.get('books_data'))
