@@ -36,42 +36,219 @@ if 'selected_book_idx' not in st.session_state:
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+    :root {
+        --bg: #f6f7fb;
+        --panel: rgba(255, 255, 255, 0.82);
+        --panel-strong: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: rgba(148, 163, 184, 0.22);
+        --primary: #6d7cff;
+        --primary-2: #9b7bff;
+        --success: #10b981;
+        --danger: #ef4444;
+        --shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+        --radius: 22px;
+    }
     
     html, body, [class*="css"], .stMarkdown, p, h1, h2, h3, h4, h5, h6, label, input, button { 
         font-family: 'Kanit', sans-serif !important; 
     }
     
-    .stApp { background-color: #fcfcfd; }
-    
-    [data-testid="stSidebar"] { background-color: #ffffff; box-shadow: 4px 0 15px rgba(0,0,0,0.03); }
-    [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #1e293b !important; font-weight: 600 !important; font-size: 15px !important; }
-    @media (prefers-color-scheme: dark) {
-        [data-testid="stSidebar"] { background-color: #0f172a; }
-        [data-testid="stSidebar"] label, [data-testid="stSidebar"] p { color: #f8fafc !important; }
-        .stApp { background-color: #1e293b; }
+    .stApp {
+        background:
+            radial-gradient(circle at top left, rgba(109, 124, 255, 0.14), transparent 28%),
+            radial-gradient(circle at top right, rgba(155, 123, 255, 0.12), transparent 26%),
+            linear-gradient(180deg, #f8faff 0%, var(--bg) 100%);
+        color: var(--text);
+    }
+    .block-container {
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
     }
     
-    div[role="radiogroup"] > label { padding: 10px 20px; background: transparent; border-radius: 12px; transition: 0.3s ease; cursor: pointer; margin-bottom: 5px; }
-    div[role="radiogroup"] > label:hover { background: rgba(108, 99, 255, 0.1); transform: translateX(5px); }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,247,255,0.98));
+        border-right: 1px solid var(--border);
+        box-shadow: 6px 0 28px rgba(15, 23, 42, 0.05);
+    }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span {
+        color: var(--text) !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+    }
+    [data-testid="stSidebar"] .stRadio > div {
+        gap: 0.35rem;
+    }
+    @media (prefers-color-scheme: dark) {
+        .stApp { background: linear-gradient(180deg, #0f172a 0%, #111827 100%); color: #e2e8f0; }
+        [data-testid="stSidebar"] { background: linear-gradient(180deg, #0b1220, #111827); }
+        [data-testid="stSidebar"] label, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span { color: #e2e8f0 !important; }
+        .metric-card, .rank-card, .soft-panel { background: rgba(15, 23, 42, 0.88) !important; border-color: rgba(148, 163, 184, 0.18) !important; }
+    }
+    
+    h1, h2, h3 {
+        letter-spacing: -0.02em;
+    }
+    p, li {
+        color: var(--muted);
+    }
+    
+    div[role="radiogroup"] > label {
+        padding: 12px 16px;
+        background: rgba(255,255,255,0.72);
+        border: 1px solid transparent;
+        border-radius: 16px;
+        transition: 0.25s ease;
+        cursor: pointer;
+        margin-bottom: 8px;
+        box-shadow: 0 6px 22px rgba(15, 23, 42, 0.04);
+    }
+    div[role="radiogroup"] > label:hover {
+        background: rgba(109, 124, 255, 0.08);
+        border-color: rgba(109, 124, 255, 0.24);
+        transform: translateX(4px);
+    }
 
-    .stButton > button { border-radius: 20px; border: none; background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%); color: white; font-weight: 500; transition: all 0.3s ease; }
-    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(129, 140, 248, 0.35); color: white; }
+    .stButton > button,
+    .stDownloadButton > button {
+        border-radius: 16px !important;
+        border: 1px solid rgba(109, 124, 255, 0.18) !important;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        transition: all 0.25s ease !important;
+        box-shadow: 0 10px 25px rgba(109, 124, 255, 0.25);
+    }
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 30px rgba(109, 124, 255, 0.28);
+        color: white !important;
+    }
+    .stTextInput input,
+    .stTextArea textarea,
+    .stSelectbox div[data-baseweb="select"] > div,
+    .stMultiSelect div[data-baseweb="select"] > div,
+    .stDateInput input {
+        border-radius: 14px !important;
+        border-color: rgba(148, 163, 184, 0.2) !important;
+        background: rgba(255,255,255,0.88) !important;
+    }
     
-    .metric-card { background: white; padding: 25px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; margin-bottom: 20px; border: 1px solid #e2e8f0; transition: 0.3s ease; }
-    @media (prefers-color-scheme: dark) { .metric-card { background: #1e293b; border-color: #334155; } }
-    .metric-card h2 { color: #818cf8; font-size: 2.2rem; font-weight: 700; margin-top: 10px; }
+    .soft-panel,
+    .metric-card,
+    .rank-card {
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+    }
+    .metric-card {
+        padding: 22px 18px;
+        text-align: center;
+        margin-bottom: 18px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .metric-card:hover, .rank-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 22px 50px rgba(15, 23, 42, 0.10);
+    }
+    .metric-card h2 {
+        color: var(--primary);
+        font-size: 2.15rem;
+        font-weight: 700;
+        margin-top: 8px;
+        margin-bottom: 0;
+    }
+    .metric-card h3 {
+        color: var(--text);
+        font-size: 0.98rem;
+        margin-bottom: 0.25rem;
+    }
     
-    .rank-card { background: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s ease; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-    @media (prefers-color-scheme: dark) { .rank-card { background: #1e293b; border-color: #334155; } }
-    .rank-img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 8px; }
+    .rank-card {
+        padding: 12px;
+        text-align: center;
+        margin-bottom: 18px;
+    }
+    .rank-img {
+        width: 100%;
+        aspect-ratio: 2/3;
+        object-fit: cover;
+        border-radius: 14px;
+        box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14);
+        margin-bottom: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+    }
     
-    .btn-delete>div>button { background: linear-gradient(135deg, #FF4B4B 0%, #ff7676 100%) !important; color: white !important; }
+    .btn-delete>div>button {
+        background: linear-gradient(135deg, var(--danger) 0%, #fb7185 100%) !important;
+        color: white !important;
+    }
+    .btn-secondary>div>button {
+        background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+        color: #0f172a !important;
+    }
+    .hero {
+        background: linear-gradient(135deg, rgba(109,124,255,0.16), rgba(155,123,255,0.10));
+        border: 1px solid rgba(109,124,255,0.16);
+        border-radius: 28px;
+        padding: 24px 26px;
+        box-shadow: var(--shadow);
+        margin-bottom: 18px;
+    }
+    .hero-kicker {
+        color: var(--primary);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.78rem;
+    }
+    .hero-title {
+        margin: 0.25rem 0 0.45rem 0;
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--text);
+    }
+    .hero-subtitle {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.6;
+        max-width: 58rem;
+    }
+    .section-title {
+        margin: 1.2rem 0 0.75rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+    }
+    .section-note {
+        color: var(--muted);
+        margin-top: -0.35rem;
+        margin-bottom: 0.9rem;
+    }
+    .compact-pill {
+        display: inline-block;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(109,124,255,0.10);
+        color: var(--primary);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-right: 0.5rem;
+        margin-bottom: 0.4rem;
+    }
     
     /* Smart Flex Calendar CSS */
     .fc-daygrid-day-frame { min-height: 110px !important; height: 100% !important; }
-    .fc-event { border-radius: 6px !important; border: none !important; padding: 2px 6px !important; font-weight: 400 !important; font-size: 0.85em !important; margin: 2px 0 !important; }
-    .fc-daygrid-day-number { font-size: 0.9em !important; color: #64748b !important; padding: 8px !important; text-decoration: none !important; }
-    .fc-daygrid-more-link { color: #818cf8 !important; font-weight: 500 !important; font-size: 0.85em !important; padding-left: 5px !important; }
+    .fc-event { border-radius: 8px !important; border: none !important; padding: 3px 8px !important; font-weight: 500 !important; font-size: 0.84em !important; margin: 2px 0 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .fc-daygrid-day-number { font-size: 0.9em !important; color: #64748b !important; padding: 8px !important; text-decoration: none !important; font-weight: 600 !important; }
+    .fc-daygrid-more-link { color: #6d7cff !important; font-weight: 700 !important; font-size: 0.82em !important; padding-left: 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -499,7 +676,16 @@ def render_audit_log_viewer():
 # ==========================================
 # 📱 3. ระบบนำทาง (Sidebar)
 # ==========================================
-st.sidebar.markdown("<h2 style='text-align: center; color: #818cf8; font-weight: 700; margin-bottom: 20px;'>💎 Nok-kaew Admin</h2>", unsafe_allow_html=True)
+st.sidebar.markdown(
+    """
+    <div style="padding: 1rem 0.9rem 0.35rem 0.9rem;">
+      <div class="hero-kicker">Admin Suite</div>
+      <div style="font-size:1.35rem; font-weight:800; color:#0f172a; line-height:1.1; margin-top:0.25rem;">Nok-kaew Admin</div>
+      <div style="color:#64748b; font-size:0.92rem; margin-top:0.45rem;">จัดการนิยาย คิวงาน และรายรับในที่เดียว</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 menu_options = [
     "📊 สรุปภาพรวม", 
@@ -522,7 +708,16 @@ if menu != "📚 จัดการนิยาย & ไฟล์":
 # 📊 หน้า 1: สรุปภาพรวม (Dashboard)
 # ------------------------------------------
 if menu == "📊 สรุปภาพรวม":
-    st.title("📊 สรุปภาพรวม (Dashboard)")
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Overview</div>
+            <div class="hero-title">สรุปภาพรวมของระบบ</div>
+            <p class="hero-subtitle">ดูสถานะนิยาย คิวงาน และรายรับได้ในหน้าเดียว พร้อมปุ่มทางลัดสำหรับรีเฟรชข้อมูลอย่างรวดเร็ว</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     render_system_health_panel()
     
     if st.button("🔄 โหลดข้อมูลใหม่", type="primary"): 
@@ -540,6 +735,7 @@ if menu == "📊 สรุปภาพรวม":
     df_finance = st.session_state.finance_db.copy()
     total_revenue = pd.to_numeric(df_finance['ยอดสุทธิ'], errors='coerce').sum() if not df_finance.empty else 0
 
+    st.markdown('<div class="section-title">ภาพรวมตัวเลขสำคัญ</div>', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1: 
         st.markdown(f"<div class='metric-card'><h3>📚 นิยายทั้งหมด</h3><h2>{total_books}</h2></div>", unsafe_allow_html=True)
@@ -550,6 +746,7 @@ if menu == "📊 สรุปภาพรวม":
     with col4: 
         st.markdown(f"<div class='metric-card'><h3>💰 ยอดสุทธิรวม</h3><h2 style='color:#818cf8;'>฿{total_revenue:,.0f}</h2></div>", unsafe_allow_html=True)
 
+    st.markdown('<div class="section-title">แนวโน้มรายงาน</div>', unsafe_allow_html=True)
     c_c1, c_c2 = st.columns(2)
     with c_c1:
         if total_books > 0:
@@ -597,8 +794,17 @@ if menu == "📊 สรุปภาพรวม":
 # 📅 หน้า 2: ปฏิทินคิวงาน (Smart Flex)
 # ------------------------------------------
 elif menu == "📅 ปฏิทินคิวงาน":
-    st.title("📅 ปฏิทินจดคิวงาน")
-    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ (ระบบรองรับงานจำนวนมากโดยไม่ทำให้ตารางเสียทรง)")
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Calendar</div>
+            <div class="hero-title">ปฏิทินคิวงาน</div>
+            <p class="hero-subtitle">คลิกวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ เหมาะกับการมองภาพรวมรายเดือนและแก้รายการอย่างรวดเร็ว</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info("💡 คลิกที่ช่องวันที่เพื่อเพิ่มหรือแก้ไขคิวงานของวันนั้นๆ")
     
     unique_novels = [b['ชื่อเรื่อง'] for b in st.session_state.books_data] if st.session_state.books_data else []
     
@@ -668,6 +874,16 @@ elif menu == "📅 ปฏิทินคิวงาน":
 # 📚 หน้า 3: จัดการนิยาย & ไฟล์
 # ------------------------------------------
 elif menu == "📚 จัดการนิยาย & ไฟล์":
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Library</div>
+            <div class="hero-title">จัดการนิยาย & ไฟล์</div>
+            <p class="hero-subtitle">เพิ่ม แก้ไข ลบ และอัปโหลดปกได้ในหน้าเดียว พร้อมโหมดแกลลอรี่และตารางเพื่อเลือกวิธีทำงานที่ถนัด</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     if st.session_state.selected_book_idx is not None:
         idx = st.session_state.selected_book_idx
         b = st.session_state.books_data[idx]
@@ -827,6 +1043,16 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
 # 💰 หน้า 4: บัญชี & ค่าตอบแทน
 # ------------------------------------------
 elif menu == "💰 บัญชี & ค่าตอบแทน":
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Finance</div>
+            <div class="hero-title">จัดการบัญชี & ส่วนแบ่ง</div>
+            <p class="hero-subtitle">บันทึกรายรับได้เร็วขึ้น ดูสรุปยอดแยกตาม QC และตรวจสอบข้อมูลย้อนหลังได้สะดวก</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("💰 จัดการบัญชี & ส่วนแบ่ง (QC)")
     
     tab1, tab2, tab3 = st.tabs(["⚡ ลงบัญชีด่วนรายคน", "📝 ฐานข้อมูลรายรับ", "💸 สรุปยอดส่วนแบ่ง"])
@@ -900,12 +1126,32 @@ elif menu == "💰 บัญชี & ค่าตอบแทน":
 # 🧾 หน้า 5: ประวัติการแก้ไข
 # ------------------------------------------
 elif menu == "🧾 ประวัติการแก้ไข":
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Audit</div>
+            <div class="hero-title">ประวัติการแก้ไข</div>
+            <p class="hero-subtitle">ดูว่ามีการเปลี่ยนแปลงอะไร เมื่อไหร่ และโดยใคร เพื่อให้ตามงานและตรวจสอบย้อนหลังได้ง่าย</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     render_audit_log_viewer()
 
 # ------------------------------------------
 # ⚙️ หน้า 6: ตั้งค่าระบบ
 # ------------------------------------------
 elif menu == "⚙️ ตั้งค่าระบบ":
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-kicker">Settings</div>
+            <div class="hero-title">ตั้งค่าระบบ</div>
+            <p class="hero-subtitle">จัดการหมวดหมู่ แพลตฟอร์ม และสำรองข้อมูลได้จากหน้าเดียว</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("⚙️ ตั้งค่าหมวดหมู่และแพลตฟอร์ม")
     
     c1, c2 = st.columns(2)
