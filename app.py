@@ -27,6 +27,8 @@ from ui_dashboard import render_dashboard
 from ui_calendar import render_calendar_page
 from ui_books import render_books_page
 from ui_finance import render_finance_page
+from ui_audit import render_audit_page
+from ui_settings import render_settings_page
 from ui_panels import daily_manager_dialog, render_audit_log_viewer, render_system_health_panel
 
 # ==========================================
@@ -183,78 +185,6 @@ elif menu == "📅 ปฏิทินคิวงาน":
 # 📚 หน้า 3: จัดการนิยาย & ไฟล์
 # ------------------------------------------
 elif menu == "📚 จัดการนิยาย & ไฟล์":
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-kicker">Library</div>
-            <div class="hero-title">จัดการนิยาย & ไฟล์</div>
-            <p class="hero-subtitle">เพิ่ม แก้ไข ลบ และอัปโหลดปกได้ในหน้าเดียว พร้อมโหมดแกลลอรี่และตารางเพื่อเลือกวิธีทำงานที่ถนัด</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if st.session_state.selected_book_idx is not None:
-        idx = st.session_state.selected_book_idx
-        b = st.session_state.books_data[idx]
-        
-        if st.button("🔙 กลับหน้าหลัก"): 
-            st.session_state.selected_book_idx = None
-            st.rerun()
-            
-        st.title(f"🛠️ แก้ไข: {b['ชื่อเรื่อง']}")
-        st.markdown("---")
-        
-        c_img, c_form = st.columns([1, 3])
-        with c_img: 
-            safe_image(b.get('ภาพปก'))
-            st.markdown("##### 📤 อัปโหลดปก")
-            uploaded_file = st.file_uploader("เลือกรูปจากเครื่อง", type=["jpg", "jpeg", "png"])
-            
-            if uploaded_file and st.button("🚀 ยืนยันอัปโหลด", use_container_width=True):
-                new_url = upload_to_imgbb(uploaded_file)
-                if new_url: 
-                    st.session_state.books_data[idx]['ภาพปก'] = new_url
-                    append_audit_log('อัปโหลดปก', f"{b['ชื่อเรื่อง']}")
-                    save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
-                    st.rerun()
-            
-        with c_form:
-            e_title = st.text_input("ชื่อเรื่อง", value=b['ชื่อเรื่อง'])
-            
-            c_f1, c_f2 = st.columns(2)
-            e_cat = c_f1.selectbox("หมวดหมู่", st.session_state.app_settings['categories'], index=st.session_state.app_settings['categories'].index(b.get('หมวดหมู่','ทั่วไป')) if b.get('หมวดหมู่') in st.session_state.app_settings['categories'] else 0)
-            e_stat = c_f2.selectbox("สถานะ", ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"], index=["กำลังอัปเดต", "จบแล้ว", "พักการแปล"].index(b.get('สถานะ','กำลังอัปเดต')) if b.get('สถานะ') in ["กำลังอัปเดต", "จบแล้ว", "พักการแปล"] else 0)
-            
-            c_f3, c_f4, c_f5 = st.columns(3)
-            e_qc = c_f3.radio("QC", ["ตอง", "ตาว"], index=["ตอง", "ตาว"].index(b.get('QC','ตอง')) if b.get('QC') in ["ตอง", "ตาว"] else 0, horizontal=True)
-            e_tgt = c_f4.number_input("จำนวนตอนต้นฉบับ", value=int(b.get('เป้าหมาย',1)))
-            e_curr = c_f5.number_input("แปลเสร็จแล้ว (ตอน)", value=int(b.get('ตอนปัจจุบัน',0)))
-            
-            e_cover = st.text_input("ลิงก์ภาพปก", value=b.get('ภาพปก',''))
-            e_synopsis = st.text_area("📔 เรื่องย่อ", value=b.get('เรื่องย่อ',''), height=100)
-            
-            sv_col, del_col = st.columns(2)
-            
-            if sv_col.button("💾 บันทึกข้อมูลนิยาย", type="primary", use_container_width=True):
-                st.session_state.books_data[idx].update({
-                    'ชื่อเรื่อง': e_title, 'หมวดหมู่': e_cat, 'QC': e_qc, 'ภาพปก': e_cover,
-                    'สถานะ': e_stat, 'ตอนปัจจุบัน': e_curr, 'เป้าหมาย': e_tgt, 'เรื่องย่อ': e_synopsis
-                })
-                append_audit_log('แก้ไขนิยาย', e_title)
-                save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
-                st.session_state.selected_book_idx = None
-                st.rerun()
-            
-            st.markdown("<div class='btn-delete'>", unsafe_allow_html=True)
-            if del_col.button("🗑️ ลบนิยายเรื่องนี้", use_container_width=True):
-                deleted_title = st.session_state.books_data[idx].get('ชื่อเรื่อง', 'ไม่ทราบชื่อ')
-                st.session_state.books_data.pop(idx)
-                append_audit_log('ลบนิยาย', deleted_title)
-                save_data(["Books", "AuditLog"]) # บันทึกเฉพาะนิยาย
-# ------------------------------------------
-# 📚 หน้า 3: จัดการนิยาย & ไฟล์
-# ------------------------------------------
-elif menu == "📚 จัดการนิยาย & ไฟล์":
     render_books_page(safe_image, upload_to_imgbb, append_audit_log, save_data, validate_book_editor_df)
 
 # ------------------------------------------
@@ -262,4 +192,16 @@ elif menu == "📚 จัดการนิยาย & ไฟล์":
 # ------------------------------------------
 elif menu == "💰 บัญชี & ค่าตอบแทน":
     render_finance_page(append_audit_log, save_data, validate_finance_editor_df)
+
+# ------------------------------------------
+# 🧾 หน้า 5: ประวัติการแก้ไข
+# ------------------------------------------
+elif menu == "🧾 ประวัติการแก้ไข":
+    render_audit_page()
+
+# ------------------------------------------
+# ⚙️ หน้า 6: ตั้งค่าระบบ
+# ------------------------------------------
+elif menu == "⚙️ ตั้งค่าระบบ":
+    render_settings_page(save_data)
 
