@@ -1,11 +1,26 @@
 import streamlit as st
 import pandas as pd
-import requests
 from streamlit_gsheets import GSheetsConnection
-import json
 import plotly.express as px
-from datetime import datetime
 from streamlit_calendar import calendar
+from app_utils import (
+    append_audit_log,
+    check_required_secrets,
+    deduplicate_dataframe,
+    export_section_csv,
+    get_imgbb_api_key,
+    get_thai_date,
+    log_error,
+    normalize_book_record,
+    parse_links,
+    safe_image,
+    safe_parse_date,
+    upload_to_imgbb,
+    validate_book_editor_df,
+    validate_books_data,
+    validate_calendar_data,
+    validate_finance_editor_df,
+)
 
 # ==========================================
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
@@ -283,13 +298,13 @@ def validate_calendar_data(calendar_df):
             return False, f"ไม่มีคอลัมน์ {col}"
     return True, "ok"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_google_sheets():
     try:
-        b_df = conn.read(worksheet="Books", ttl=0)
-        f_df = conn.read(worksheet="Finance", ttl=0)
-        c_df = conn.read(worksheet="Calendar", ttl=0)
-        s_df = conn.read(worksheet="Settings", ttl=0)
+        b_df = conn.read(worksheet="Books")
+        f_df = conn.read(worksheet="Finance")
+        c_df = conn.read(worksheet="Calendar")
+        s_df = conn.read(worksheet="Settings")
         return b_df, f_df, c_df, s_df
     except Exception as e:
         log_error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ", e)
@@ -376,7 +391,7 @@ def save_data(sheets_to_save):
         if "AuditLog" in sheets_to_save and 'audit_log' in st.session_state:
             conn.update(worksheet="AuditLog", data=st.session_state.audit_log)
             
-        st.cache_data.clear()
+        fetch_all_google_sheets.clear()
         st.toast(f"✅ บันทึกข้อมูลเรียบร้อยแล้ว!")
     except Exception as e: 
         log_error("Error saving", e)
@@ -510,9 +525,12 @@ if menu == "📊 สรุปภาพรวม":
     st.title("📊 สรุปภาพรวม (Dashboard)")
     render_system_health_panel()
     
-    if st.button("🔄 โหลดข้อมูลใหม่ (Clear Cache)", type="primary"): 
-        st.cache_data.clear()
+    if st.button("🔄 โหลดข้อมูลใหม่", type="primary"): 
+        fetch_all_google_sheets.clear()
         st.session_state.pop('books_data', None)
+        st.session_state.pop('finance_db', None)
+        st.session_state.pop('calendar_db', None)
+        st.session_state.pop('app_settings', None)
         st.rerun()
     
     total_books = len(st.session_state.books_data)
