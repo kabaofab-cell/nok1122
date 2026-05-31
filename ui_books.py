@@ -1,4 +1,4 @@
-﻿import pandas as pd
+import pandas as pd
 import streamlit as st
 
 
@@ -79,18 +79,14 @@ def render_books_page(safe_image, upload_to_imgbb, append_audit_log, save_data, 
                         card = f"<div class='rank-card' style='padding: 8px;'><img src='{img_url}' class='rank-img' onerror=\"this.onerror=null;this.src='https://via.placeholder.com/300x450';\"><div style='font-size:11px; font-weight:600; line-height:1.2; margin-bottom:5px; height:28px; overflow:hidden;'>{b['ชื่อเรื่อง']}</div></div>"
                         st.markdown(card.replace('\n',''), unsafe_allow_html=True)
                     
-                        b_col1, b_col2 = st.columns(2, gap="small")
+                        if st.button("✏️ แก้ไข", key=f"edit_{real_idx}", use_container_width=True):
+                            st.session_state.selected_book_idx = real_idx
+                            st.rerun()
                         
-                        with b_col1:
-                            if st.button("✏️ แก้ไข", key=f"edit_{real_idx}", use_container_width=True):
-                                st.session_state.selected_book_idx = real_idx
-                                st.rerun()
-                        
-                        with b_col2:
-                            if st.button("🗑️ ลบ", key=f"delete_{real_idx}", use_container_width=True):
-                                st.session_state.book_to_delete = real_idx
-                                st.session_state.show_delete_confirm = True
-                                st.rerun()
+                        if st.button("🗑️ ลบ", key=f"delete_{real_idx}", use_container_width=True):
+                            st.session_state.book_to_delete = real_idx
+                            st.session_state.show_delete_confirm = True
+                            st.rerun()
         
         # ลบนิยาย - ขั้นตอนยืนยัน
         if st.session_state.get('show_delete_confirm', False):
