@@ -1,4 +1,5 @@
 ﻿import json
+import os
 
 import streamlit as st
 import pandas as pd
@@ -27,6 +28,12 @@ from ui_settings import render_settings_page
 from ui_panels import daily_manager_dialog
 
 # ==========================================
+# 🌍 Environment Detection
+# ==========================================
+IS_PREVIEW = os.getenv("CF_PAGES_BRANCH") and os.getenv("CF_PAGES_BRANCH") != "main"
+ENVIRONMENT = "PREVIEW" if IS_PREVIEW else "PRODUCTION"
+
+# ==========================================
 # 🔑 0. การตั้งค่าความลับ (Secrets & Settings)
 # ==========================================
 st.set_page_config(page_title="Nok-kaew Admin Pro", layout="wide", page_icon="💎")
@@ -35,10 +42,14 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # ==========================================
 # 🎨 1. ตั้งค่าและดีไซน์ (Modern Soft UI & Smart Flex)
 # ==========================================
-if 'selected_book_idx' not in st.session_state: 
+if 'selected_book_idx' not in st.session_state:
     st.session_state.selected_book_idx = None
 
 render_app_style()
+
+# Show preview warning banner
+if IS_PREVIEW:
+    st.warning("⚠️ **Preview Environment** - This is a test version. Data changes may not be permanent. Use production at nokkub.com for real transactions.")
 
 
 @st.cache_data(ttl=300, show_spinner=False)
