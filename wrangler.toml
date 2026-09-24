@@ -1,0 +1,20 @@
+name = "nokkub"
+type = "javascript"
+account_id = ""
+workers_dev = true
+
+# Set environment variables for preview and production
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
+
+# Build configuration
+[build]
+command = "pip install -r requirements.txt"
+cwd = "."
+
+# Cloudflare Pages configuration
+main = "app.py"
+compatibility_date = "2024-01-01"
